@@ -37,6 +37,8 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       - name: Synchronize Capacitor Android
         run: npx cap sync android
@@ -52,8 +54,8 @@ jobs:
           mkdir -p artifacts
           APK_FILE=$(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1)
           if [ -n "$APK_FILE" ]; then
-            cp "$APK_FILE" artifacts/Zapdrop-v1.0-release.apk
-            cd artifacts && sha256sum Zapdrop-v1.0-release.apk > Zapdrop-v1.0-release.apk.sha256
+            cp "$APK_FILE" "artifacts/Zapdrop-${GITHUB_REF_NAME#v}-release.apk"
+            cd artifacts && sha256sum "Zapdrop-${GITHUB_REF_NAME#v}-release.apk" > "Zapdrop-${GITHUB_REF_NAME#v}-release.apk.sha256"
           else
             echo "Error: No APK generated!"
             exit 1
@@ -62,17 +64,17 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zapdrop-v1.0-release-apk
+          name: Zapdrop-${{ github.ref_name }}-release-apk
           path: artifacts/*
 
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Zapdrop v1.0.0 (Android 5.1+ / API 22+)"
+          tag_name: ${{ github.ref_name }}
+          name: "Zapdrop ${{ github.ref_name }} (Android 5.1+ / API 22+)"
           body: |
-            ## Zapdrop v1.0.0 Release (Android 5.1+ / API 22+)
+            ## Zapdrop ${{ github.ref_name }} Release (Android 5.1+ / API 22+)
             
             - **Platform**: Android 5.1+ (API Level 22 through API 34+)
             - **Engine**: Capacitor 6.2 + React + Vite + Tailwind CSS + NanoHTTPD
@@ -83,10 +85,10 @@ jobs:
               - Background transfer & notification support
             
             ### Artifacts:
-            - `Zapdrop-v1.0-release.apk`
+            - `Zapdrop-${{ github.ref_name }}-release.apk`
           files: |
-            artifacts/Zapdrop-v1.0-release.apk
-            artifacts/Zapdrop-v1.0-release.apk.sha256
+            artifacts/Zapdrop-${{ github.ref_name }}-release.apk
+            artifacts/Zapdrop-${{ github.ref_name }}-release.apk.sha256
           draft: false
           prerelease: false
         env:
