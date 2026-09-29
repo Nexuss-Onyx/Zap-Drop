@@ -17,12 +17,10 @@ interface BottomNavProps {
 }
 
 /**
- * Modern Minimalist Luxurious Logo:
- * Combines Hotspot (radiating beacon broadcast waves) + Download (geometric precision downward drop arrow & tray).
- * Distinct luxurious gradient aesthetic (emerald & pure luminescent white) instead of plain black.
+ * Brand Logo: Minimalist Luxury Hotspot + Download Drop Geometric Beacon
  */
-export const ZapShareIcon: React.FC<{ size?: number; className?: string; color?: string }> = ({
-  size = 24,
+export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
+  size = 20,
   className = '',
 }) => (
   <svg
@@ -34,49 +32,68 @@ export const ZapShareIcon: React.FC<{ size?: number; className?: string; color?:
     className={className}
   >
     <defs>
-      <linearGradient id="zapLuxuryGrad" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
+      <linearGradient id="zapBrandGrad" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
         <stop offset="0%" stopColor="#2ee86f" />
-        <stop offset="50%" stopColor="#4ade80" />
+        <stop offset="60%" stopColor="#4ade80" />
         <stop offset="100%" stopColor="#ffffff" />
       </linearGradient>
-      <linearGradient id="zapCoreGrad" x1="30" y1="20" x2="70" y2="80" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#ffffff" />
-        <stop offset="100%" stopColor="#2ee86f" />
-      </linearGradient>
     </defs>
-
-    {/* Top Hotspot Outer Radiating Wave Arc */}
+    {/* Concentric Hotspot Wave Arcs */}
     <path
       d="M22 34C30.2 24.8 40.4 19 50 19C59.6 19 69.8 24.8 78 34"
-      stroke="url(#zapLuxuryGrad)"
+      stroke="url(#zapBrandGrad)"
+      strokeWidth="6"
+      strokeLinecap="round"
+    />
+    <path
+      d="M33 45C38 40 43.8 37 50 37C56.2 37 62 40 67 45"
+      stroke="#2ee86f"
       strokeWidth="5"
       strokeLinecap="round"
     />
-
-    {/* Top Hotspot Inner Radiating Wave Arc */}
+    {/* Download Drop Arrow */}
     <path
-      d="M32 44C37.2 38.5 43.4 35 50 35C56.6 35 62.8 38.5 68 44"
-      stroke="#2ee86f"
-      strokeWidth="4.5"
-      strokeLinecap="round"
-      strokeOpacity="0.9"
-    />
-
-    {/* Download Precision Arrow - Piercing downward through the hotspot waves */}
-    <path
-      d="M50 36V66M50 66L38 53M50 66L62 53"
-      stroke="url(#zapCoreGrad)"
-      strokeWidth="6"
+      d="M50 38V66M50 66L39 54M50 66L61 54"
+      stroke="#ffffff"
+      strokeWidth="6.5"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-
-    {/* Minimalist Receiver Cradle Base */}
+    {/* Receiver Tray */}
     <path
       d="M26 73C26 77.4183 29.5817 81 34 81H66C70.4183 81 74 77.4183 74 73"
-      stroke="url(#zapLuxuryGrad)"
-      strokeWidth="5"
+      stroke="url(#zapBrandGrad)"
+      strokeWidth="6"
       strokeLinecap="round"
+    />
+  </svg>
+);
+
+/**
+ * Reverted Exact Share Icon (Curved arrow springing out of open container box)
+ */
+export const ZapShareIcon: React.FC<{ size?: number; className?: string; color?: string }> = ({
+  size = 24,
+  className = '',
+  color = 'currentColor',
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 100 100"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+  >
+    {/* Open Container Box */}
+    <path
+      d="M38 31H19C15.6863 31 13 33.6863 13 37V81C13 84.3137 15.6863 87 19 87H69C72.3137 87 75 84.3137 75 81V62L67.5 56.5V79.5H20.5V38.5H30.5L38 31Z"
+      fill={color}
+    />
+    {/* Curved Arrow Springing Outward to the Top-Right */}
+    <path
+      d="M31.5 61.5C35 48 44.5 35 62.5 30.5V18.5L87 37.5L62.5 56.5V43.5C49 44.5 39 50.5 31.5 61.5Z"
+      fill={color}
     />
   </svg>
 );
@@ -197,21 +214,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           />
         </svg>
 
-        {/* Big Elevated Center Share Button with Combined Hotspot+Download Luxury Logo */}
+        {/* Big Elevated Center Share Button with Reverted Curved Arrow Share Icon */}
         <div className="absolute left-1/2 -translate-x-1/2 top-[-16px] z-20">
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={handleCenterShareClick}
-            className={`w-13 h-13 rounded-full flex items-center justify-center transition-all cursor-pointer border-2 border-white/20 ${
+            className={`w-13 h-13 rounded-full flex items-center justify-center transition-all cursor-pointer border-2 border-white/25 ${
               isActionMenuOpen
-                ? 'bg-[#12141c] shadow-[0_0_30px_rgba(46,232,111,0.7)] ring-2 ring-[#2ee86f]'
-                : 'bg-gradient-to-tr from-[#0f1117] via-[#161a24] to-[#1e2433] shadow-[0_6px_22px_rgba(0,0,0,0.7)] hover:border-[#2ee86f]/50'
+                ? 'bg-gradient-to-tr from-[#16a34a] to-[#2ee86f] text-black shadow-[0_0_30px_rgba(46,232,111,0.8)] scale-105'
+                : 'bg-gradient-to-tr from-[#22c55e] to-[#39f07c] text-black shadow-[0_6px_22px_rgba(46,232,111,0.55)]'
             }`}
             title="Zapdrop Share"
             aria-label="Zapdrop Share"
           >
-            <ZapShareIcon size={26} />
+            <ZapShareIcon size={24} color="#0d0e12" />
           </motion.button>
         </div>
 
