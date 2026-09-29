@@ -101,18 +101,18 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Floating directly over and above the nav bar */}
-      <div className="fixed bottom-[84px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Positioned directly above the nav bar, behind the elevated Share button (z-30) */}
+      <div className="fixed bottom-[64px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
         <motion.div
           layout
-          initial={{ opacity: 0, y: 40, scale: 0.92 }}
+          initial={{ opacity: 0, y: 35, scale: 0.92 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 40, scale: 0.92 }}
+          exit={{ opacity: 0, y: 35, scale: 0.92 }}
           transition={{ type: 'spring', stiffness: 380, damping: 28 }}
           className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
         >
           {isCollapsed ? (
-            /* COLLAPSED BUTTON VIEW - CHEVRON UP ON LEFT */
+            /* COLLAPSED BUTTON VIEW - SITS DIRECTLY ON NAVBAR, BEHIND SHARE BUTTON */
             <motion.div
               layout
               initial={{ opacity: 0 }}
@@ -121,15 +121,20 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               onClick={() => setIsCollapsed(false)}
               className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
-              <div className="flex items-center gap-2">
+              {/* Left Wing */}
+              <div className="flex items-center gap-1.5">
                 <div className="p-1 rounded-lg neu-pressed text-[#2ee86f]">
                   <ChevronUp size={13} />
                 </div>
-                <span className="text-xs font-bold text-white group-hover:text-[#2ee86f] transition-colors">
-                  Tap to view Devices ({peers.length})
+                <span className="text-[11px] font-bold text-white group-hover:text-[#2ee86f] transition-colors">
+                  Devices ({peers.length})
                 </span>
               </div>
 
+              {/* Center Spacer for Share Button */}
+              <div className="w-12 h-4" />
+
+              {/* Right Wing */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -142,13 +147,13 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </button>
             </motion.div>
           ) : (
-            /* EXPANDED FULL RADAR CARD VIEW */
+            /* EXPANDED FULL RADAR CARD VIEW - RISES UP FROM BEHIND THE SHARE BUTTON */
             <motion.div
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.2 }}
-              className="p-3 flex flex-col items-center text-center"
+              className="p-3 pb-3.5 flex flex-col items-center text-center"
             >
               {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
