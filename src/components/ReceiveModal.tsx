@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor, QrCode, Wifi } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor, QrCode, KeyRound, Loader2 } from 'lucide-react';
 import { DeviceProfile, OSPlatform } from '../types';
-import { startReceive, ReceiveProgressInfo } from '../services/receive';
+import { startReceive, receiveFromPeer, receiveFromCode, ReceiveProgressInfo } from '../services/receive';
 import { startRadarDiscovery } from '../services/radar';
+import { isTauri } from '../backend';
 
 interface ReceiveModalProps {
   isOpen: boolean;
@@ -27,6 +28,8 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
   const [connectingPeerId, setConnectingPeerId] = useState<string | null>(null);
   const [radarDevices, setRadarDevices] = useState<DeviceProfile[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [inputCode, setInputCode] = useState('');
   const [progressInfo, setProgressInfo] = useState<ReceiveProgressInfo | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -36,6 +39,8 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
       setProgressInfo(null);
       setStatusMessage(null);
       setIsScanning(false);
+      setIsReceiving(false);
+      setInputCode('');
       return;
     }
 
@@ -106,12 +111,60 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     }
   };
 
-  const handleSelectDevice = (peer: DeviceProfile) => {
+  const handleSelectDevice = async (peer: DeviceProfile) => {
     setConnectingPeerId(peer.id);
-    setTimeout(() => {
+    setIsReceiving(true);
+    setStatusMessage(`Requesting files from ${peer.name}...`);
+
+    try {
+      // In Tauri / desktop mode, connect and pull files from the peer directly
+      await receiveFromPeer(
+        {
+          id: peer.id,
+          name: peer.name,
+          ip: (peer as any).ip || '192.168.43.1',
+          port: (peer as any).port || 48556,
+          platform: peer.os,
+        },
+        (info) => {
+          setProgressInfo(info);
+        }
+      );
+      setStatusMessage('Transfer completed successfully!');
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      const msg = err?.message || err?.toString() || 'Transfer failed';
+      setStatusMessage(msg.includes('DECLINED') ? 'Request declined by sender' : msg);
+      // Fallback to onConnectDevice handler
       onConnectDevice(peer);
-      onClose();
-    }, 500);
+    } finally {
+      setIsReceiving(false);
+      setConnectingPeerId(null);
+    }
+  };
+
+  const handleConnectCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCode.trim()) return;
+
+    setIsReceiving(true);
+    setStatusMessage('Connecting via code...');
+
+    try {
+      await receiveFromCode(inputCode.trim(), (info) => {
+        setProgressInfo(info);
+      });
+      setStatusMessage('All files received successfully!');
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      setStatusMessage(err?.message || 'Connection with code failed');
+    } finally {
+      setIsReceiving(false);
+    }
   };
 
   const quadrantOffsets = [
@@ -205,12 +258,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
           {/* Expanded Content */}
           {!isCollapsed && (
             <div className="p-4 flex flex-col items-center text-center space-y-3">
-              
-              {/* Scan QR Code Action Button */}
+              {/* Scan QR Code Action Button (Primary on mobile, available on desktop with webcam) */}
               <button
                 onClick={handleStartQrScan}
-                disabled={isScanning}
-                className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-[#22c55e] to-[#39f07c] text-black font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(46,232,111,0.4)] hover:brightness-110 active:scale-98 transition-all cursor-pointer"
+                disabled={isScanning || isReceiving}
+                className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-[#22c55e] to-[#39f07c] text-black font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(46,232,111,0.4)] hover:brightness-110 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
               >
                 <QrCode size={16} className="stroke-[2.5]" />
                 <span>{isScanning ? 'Scanning...' : 'Scan Sender QR Code'}</span>
@@ -222,19 +274,21 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                   <div className="flex items-center justify-between text-[11px] font-bold text-white">
                     <span className="truncate max-w-[180px]">{progressInfo.fileName}</span>
                     <span className="text-[#2ee86f]">
-                      {Math.round((progressInfo.loaded / progressInfo.total) * 100)}%
+                      {Math.round((progressInfo.loaded / Math.max(1, progressInfo.total)) * 100)}%
                     </span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
                     <div
                       className="h-full bg-[#2ee86f] transition-all"
                       style={{
-                        width: `${Math.min(100, Math.round((progressInfo.loaded / progressInfo.total) * 100))}%`,
+                        width: `${Math.min(100, Math.round((progressInfo.loaded / Math.max(1, progressInfo.total)) * 100))}%`,
                       }}
                     />
                   </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-400">
-                    <span>File {progressInfo.fileIndex} of {progressInfo.fileCount}</span>
+                    <span>
+                      File {progressInfo.fileIndex} of {progressInfo.fileCount}
+                    </span>
                     <span>{progressInfo.speedMbps.toFixed(1)} MB/s</span>
                   </div>
                 </div>
@@ -312,8 +366,32 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </div>
 
               <span className="text-[10px] text-slate-400">
-                Tap a peer to initiate direct connection
+                Tap a peer in radar to download files
               </span>
+
+              {/* Direct Code Entry (Ideal for desktops without camera) */}
+              <div className="w-full pt-1 border-t border-white/5">
+                <form onSubmit={handleConnectCode} className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <KeyRound size={12} className="absolute left-2.5 top-2.5 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder="Or enter code (IP:PORT:TOKEN)"
+                      value={inputCode}
+                      onChange={(e) => setInputCode(e.target.value)}
+                      className="w-full pl-7 pr-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-[11px] placeholder-slate-500 focus:outline-hidden focus:border-[#2ee86f]"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!inputCode.trim() || isReceiving}
+                    className="px-3 py-1.5 rounded-xl bg-[#2ee86f]/20 hover:bg-[#2ee86f]/30 border border-[#2ee86f]/40 text-[#2ee86f] text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {isReceiving && <Loader2 size={12} className="animate-spin" />}
+                    <span>Receive</span>
+                  </button>
+                </form>
+              </div>
             </div>
           )}
         </motion.div>

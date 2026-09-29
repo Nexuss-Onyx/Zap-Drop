@@ -2,8 +2,40 @@ import { Capacitor } from '@capacitor/core';
 import { ZapdropNative, NativeMediaType } from '../native/zapdrop-native';
 import { DeviceFile, FileCategory, FolderNode } from '../types';
 import { MOCK_FILES, MOCK_FOLDERS, USE_MOCK } from './mock';
+import { backend, isTauri } from '../backend';
+import { formatFileSize } from './mockNetwork';
 
 export async function loadFolders(): Promise<FolderNode[]> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      const folders = await b.loadFolders();
+      if (folders && folders.length > 0) {
+        return folders.map((f) => ({
+          name: f.name,
+          path: f.name,
+          icon: f.name.toLowerCase().includes('picture') || f.name.toLowerCase().includes('photo')
+            ? 'image'
+            : f.name.toLowerCase().includes('download')
+            ? 'download'
+            : f.name.toLowerCase().includes('video') || f.name.toLowerCase().includes('movie')
+            ? 'video'
+            : f.name.toLowerCase().includes('music') || f.name.toLowerCase().includes('audio')
+            ? 'music'
+            : f.name.toLowerCase().includes('screenshot')
+            ? 'image'
+            : f.name.toLowerCase().includes('document')
+            ? 'file-text'
+            : 'folder',
+          itemsCount: f.count,
+          totalSize: f.size > 0 ? formatFileSize(f.size) : `${f.count} files`,
+        }));
+      }
+    } catch (e) {
+      console.warn('Tauri loadFolders error:', e);
+    }
+  }
+
   if (USE_MOCK) {
     return MOCK_FOLDERS;
   }
@@ -37,6 +69,61 @@ export async function loadFiles(
   query?: string,
   page = 0
 ): Promise<DeviceFile[]> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      let kind: any = 'all';
+      if (category === 'images') kind = 'image';
+      else if (category === 'videos') kind = 'video';
+      else if (category === 'audio') kind = 'audio';
+      else if (category === 'documents') kind = 'doc';
+      else if (category === 'apps') kind = 'app';
+      else if (category === 'archives') kind = 'archive';
+
+      const res = await b.loadFiles({
+        kind,
+        folder: bucket || undefined,
+        query: query || undefined,
+        page,
+      });
+
+      return await Promise.all(
+        res.items.map(async (item) => {
+          let mappedCategory: FileCategory = 'documents';
+          if (item.kind === 'image') mappedCategory = 'images';
+          else if (item.kind === 'video') mappedCategory = 'videos';
+          else if (item.kind === 'audio') mappedCategory = 'audio';
+          else if (item.kind === 'app') mappedCategory = 'apps';
+          else if (item.kind === 'archive') mappedCategory = 'archives';
+
+          let previewUrl = item.thumb || undefined;
+          if (!previewUrl && (item.kind === 'image' || item.kind === 'video')) {
+            try {
+              previewUrl = (await b.getThumbnail(item)) || undefined;
+            } catch {}
+          }
+
+          const ext = item.name.includes('.') ? item.name.split('.').pop() || '' : '';
+
+          return {
+            id: item.id,
+            name: item.name,
+            path: item.path || item.name,
+            size: item.size,
+            modifiedDate: new Date(item.modified).toLocaleDateString(),
+            category: mappedCategory,
+            mimeType: item.mime,
+            isDirectory: false,
+            previewUrl,
+            extension: ext,
+          };
+        })
+      );
+    } catch (e) {
+      console.warn('Tauri loadFiles error:', e);
+    }
+  }
+
   if (USE_MOCK) {
     let filtered = [...MOCK_FILES];
     if (category !== 'all') {

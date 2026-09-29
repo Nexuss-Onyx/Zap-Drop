@@ -1,8 +1,40 @@
 import { FilePicker } from '@capawesome/capacitor-file-picker';
 import { Capacitor } from '@capacitor/core';
 import { DeviceFile, FileCategory } from '../types';
+import { backend, isTauri } from '../backend';
 
 export async function pickAnyFiles(): Promise<DeviceFile[]> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      const files = await b.addFiles();
+      return files.map((f) => {
+        let category: FileCategory = 'documents';
+        if (f.kind === 'image') category = 'images';
+        else if (f.kind === 'video') category = 'videos';
+        else if (f.kind === 'audio') category = 'audio';
+        else if (f.kind === 'app') category = 'apps';
+        else if (f.kind === 'archive') category = 'archives';
+
+        return {
+          id: f.id,
+          name: f.name,
+          path: f.path || f.name,
+          size: f.size,
+          category,
+          modifiedDate: 'Just now',
+          mimeType: f.mime || 'application/octet-stream',
+          isDirectory: false,
+          extension: f.name.includes('.') ? f.name.split('.').pop() || '' : '',
+          previewUrl: f.thumb || undefined,
+        };
+      });
+    } catch (e) {
+      console.warn('Tauri native dialog picker error:', e);
+      return [];
+    }
+  }
+
   if (!Capacitor.isNativePlatform()) {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -60,10 +92,11 @@ export async function pickAnyFiles(): Promise<DeviceFile[]> {
         mimeType: mime || 'application/octet-stream',
         isDirectory: false,
         extension: f.name.includes('.') ? f.name.split('.').pop() || '' : '',
-        nativeUri: f.path || undefined,
+        nativeUri: f.path,
       };
     });
-  } catch {
+  } catch (e) {
+    console.warn('Native picker error:', e);
     return [];
   }
 }

@@ -22,21 +22,24 @@ import { ProfileSettings } from './components/ProfileSettings';
 import { SendModal } from './components/SendModal';
 import { ReceiveModal } from './components/ReceiveModal';
 import { TransferProgressModal } from './components/TransferProgressModal';
+import { HotspotConnectModal } from './components/HotspotConnectModal';
+import { IncomingRequestModal, IncomingRequestData } from './components/IncomingRequestModal';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { backend, isTauri } from './backend';
 
 export default function App() {
   const detectedOs = PlatformBridge.getDetectedOS();
 
   // Screen size detection: Desktop (>= 1024px) vs Phone / Tablet (< 1024px)
   const [isDesktopView, setIsDesktopView] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 || isTauri : false
   );
 
   useEffect(() => {
     const handleResize = () => {
-      setIsDesktopView(window.innerWidth >= 1024);
+      setIsDesktopView(window.innerWidth >= 1024 || isTauri);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -60,6 +63,12 @@ export default function App() {
     };
   });
 
+  // Desktop network and hotspot state
+  const [networkReady, setNetworkReady] = useState(true);
+  const [currentSsid, setCurrentSsid] = useState<string | null>(null);
+  const [isHotspotPromptOpen, setIsHotspotPromptOpen] = useState(false);
+  const [incomingRequest, setIncomingRequest] = useState<IncomingRequestData | null>(null);
+
   // Load real device info on launch
   useEffect(() => {
     getDeviceProfile().then((p) => {
@@ -73,11 +82,65 @@ export default function App() {
       }
     });
 
+    if (isTauri) {
+      backend().then(async (b) => {
+        b.scanLibrary().catch(() => {});
+
+        const unsubReq = b.onIncomingRequest((r) => {
+          setIncomingRequest(r);
+        });
+
+        const checkNet = async () => {
+          try {
+            const st = await b.getNetworkStatus();
+            setNetworkReady(st.ready);
+            setCurrentSsid(st.ssid);
+            if (st.ssid) {
+              setHotspotState((prev) => ({ ...prev, ssid: st.ssid || prev.ssid }));
+            }
+          } catch {}
+        };
+        checkNet();
+        const netTimer = setInterval(checkNet, 3000);
+
+        let unDrop: (() => void) | undefined;
+        try {
+          const tauriMod = await import('./backend/tauri');
+          const unsub = await tauriMod.enableDropZone(
+            (dropped) => {
+              if (dropped && dropped.length > 0) {
+                const mapped: DeviceFile[] = dropped.map((f) => ({
+                  id: f.id,
+                  name: f.name,
+                  path: f.path || f.name,
+                  size: f.size,
+                  category: (f.kind === 'image' ? 'images' : f.kind === 'video' ? 'videos' : f.kind === 'audio' ? 'audio' : f.kind === 'app' ? 'apps' : 'documents') as any,
+                  modifiedDate: 'Just now',
+                  mimeType: f.mime,
+                  isDirectory: false,
+                  extension: f.name.includes('.') ? f.name.split('.').pop() || '' : '',
+                }));
+                handleAddNewFiles(mapped);
+                setSelectedFiles(mapped);
+              }
+            },
+            () => {}
+          );
+          unDrop = unsub;
+        } catch {}
+
+        return () => {
+          unsubReq();
+          clearInterval(netTimer);
+          unDrop?.();
+        };
+      });
+    }
+
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
       StatusBar.setBackgroundColor({ color: '#0d0e12' }).catch(() => {});
 
-      // Capacitor Back Button handling
       const backSub = CapApp.addListener('backButton', ({ canGoBack }) => {
         if (isSendModalOpen) {
           setIsSendModalOpen(false);
@@ -217,8 +280,12 @@ export default function App() {
     setIsActionMenuOpen(false);
   };
 
-  // Open receive from action button
+  // Open receive from action button (or desktop center share button click)
   const handleOpenReceive = () => {
+    if (isTauri && !networkReady) {
+      setIsHotspotPromptOpen(true);
+      return;
+    }
     setIsSendModalOpen(false);
     setIsReceiveModalOpen(true);
     setIsReceiveCollapsed(false);
@@ -258,7 +325,6 @@ export default function App() {
     setCurrentTransfer(newRecord);
     setTransfers((prev) => [newRecord, ...prev]);
 
-    // Simulated transfer progress for peer direct click
     let p = 0;
     if (transferIntervalRef.current) clearInterval(transferIntervalRef.current);
     transferIntervalRef.current = setInterval(() => {
@@ -299,9 +365,16 @@ export default function App() {
     setTransfers((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleDecideIncoming = async (requestId: string, accept: boolean) => {
+    setIncomingRequest(null);
+    try {
+      const b = await backend();
+      await b.answerRequest(requestId, accept);
+    } catch {}
+  };
+
   return (
     <div className="min-h-screen bg-[#0d0e12] text-slate-100 flex flex-col font-sans selection:bg-[#22c55e]/30 selection:text-white">
-      
       {/* Top Header */}
       <Header
         myProfile={myProfile}
@@ -369,6 +442,19 @@ export default function App() {
         setIsCollapsed={setIsReceiveCollapsed}
       />
 
+      {/* Hotspot Connect Modal (Shown when desktop is not connected to a usable network) */}
+      <HotspotConnectModal
+        isOpen={isHotspotPromptOpen}
+        onClose={() => setIsHotspotPromptOpen(false)}
+        currentSsid={currentSsid}
+      />
+
+      {/* Incoming Request Prompt (Shown when a peer requests files from sender) */}
+      <IncomingRequestModal
+        request={incomingRequest}
+        onDecide={handleDecideIncoming}
+      />
+
       {/* Active Transfer Progress Modal */}
       {currentTransfer && (
         <TransferProgressModal
@@ -395,7 +481,6 @@ export default function App() {
         isCardCollapsed={isAnyCardCollapsed}
         onToggleCardCollapse={handleToggleCardCollapse}
       />
-
     </div>
   );
 }

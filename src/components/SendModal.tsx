@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Wifi } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Wifi, Copy, Check } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/mockNetwork';
 import { startSend, SendSession } from '../services/send';
+import { backend } from '../backend';
 
 interface SendModalProps {
   isOpen: boolean;
@@ -28,6 +29,8 @@ export const SendModal: React.FC<SendModalProps> = ({
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   const [serverIp, setServerIp] = useState<string | null>(null);
   const [serverPort, setServerPort] = useState<number | null>(null);
+  const [shortCode, setShortCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<{ bytes: number; total: number } | null>(null);
   const [transferDone, setTransferDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -41,6 +44,7 @@ export const SendModal: React.FC<SendModalProps> = ({
         sessionRef.current = null;
       }
       setQrCodeDataUrl(null);
+      setShortCode(null);
       setTransferProgress(null);
       setTransferDone(false);
       setErrorMsg(null);
@@ -71,6 +75,7 @@ export const SendModal: React.FC<SendModalProps> = ({
         setQrCodeDataUrl(session.qrCodeUrl);
         setServerIp(session.ip);
         setServerPort(session.port);
+        setShortCode(session.code || `${session.ip}:${session.port}:${session.token}`);
       })
       .catch((err) => {
         if (isMounted) {
@@ -105,6 +110,20 @@ export const SendModal: React.FC<SendModalProps> = ({
     onClose();
   };
 
+  const handleCopyCode = async () => {
+    if (!shortCode) return;
+    try {
+      const b = await backend();
+      await b.copyText(shortCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      navigator.clipboard?.writeText(shortCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   return (
     <>
       {/* Small Confirmation Modal */}
@@ -120,9 +139,9 @@ export const SendModal: React.FC<SendModalProps> = ({
               <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-2">
                 <AlertCircle size={18} />
               </div>
-              <h3 className="text-xs font-bold text-white mb-1">Stop Sharing?</h3>
+              <h3 className="text-xs font-bold text-white mb-1">Stop Sending?</h3>
               <p className="text-[11px] text-slate-400 mb-3">
-                Closing will terminate the direct local transfer session.
+                This will shut down your local file server and close the transfer session.
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -208,6 +227,23 @@ export const SendModal: React.FC<SendModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Short code with copy button */}
+              {shortCode && (
+                <div className="w-full flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/10 text-xs">
+                  <span className="font-mono text-[10px] text-emerald-400 truncate max-w-[210px] select-all">
+                    {shortCode}
+                  </span>
+                  <button
+                    onClick={handleCopyCode}
+                    className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] text-white font-semibold transition-all cursor-pointer flex items-center gap-1"
+                    title="Copy code for direct entry"
+                  >
+                    {copied ? <Check size={11} className="text-[#2ee86f]" /> : <Copy size={11} />}
+                    <span>{copied ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              )}
 
               {/* Transfer Progress Bar */}
               {transferProgress && transferProgress.total > 0 && (

@@ -1,6 +1,7 @@
 import { Device } from '@capacitor/device';
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
+import { backend, isTauri } from '../backend';
 
 export interface DeviceProfileData {
   id: string;
@@ -12,6 +13,23 @@ export interface DeviceProfileData {
 }
 
 export async function getDeviceProfile(): Promise<DeviceProfileData> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      const p = await b.getProfile();
+      return {
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+        os: p.os,
+        model: p.os === 'macos' ? 'MacBook / Mac' : p.os === 'windows' ? 'Windows PC' : 'Linux Workstation',
+        isOnline: true,
+      };
+    } catch (e) {
+      console.warn('Tauri getProfile error:', e);
+    }
+  }
+
   if (!Capacitor.isNativePlatform()) {
     const savedName = (await Preferences.get({ key: 'deviceName' })).value;
     const savedAvatar = (await Preferences.get({ key: 'avatar' })).value;
@@ -45,6 +63,13 @@ export async function getDeviceProfile(): Promise<DeviceProfileData> {
 }
 
 export async function setDeviceName(name: string): Promise<void> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      await b.setDeviceName(name);
+      return;
+    } catch {}
+  }
   await Preferences.set({ key: 'deviceName', value: name.trim() });
 }
 
