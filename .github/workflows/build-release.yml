@@ -69,8 +69,8 @@ jobs:
           mkdir -p artifacts
           APK_FILE=$(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1)
           if [ -n "$APK_FILE" ]; then
-            cp "$APK_FILE" "artifacts/Zapdrop-${GITHUB_REF_NAME#v}-release.apk"
-            cd artifacts && sha256sum "Zapdrop-${GITHUB_REF_NAME#v}-release.apk" > "Zapdrop-${GITHUB_REF_NAME#v}-release.apk.sha256"
+            cp "$APK_FILE" "artifacts/Zapdrop-${GITHUB_REF_NAME}-release.apk"
+            cd artifacts && sha256sum "Zapdrop-${GITHUB_REF_NAME}-release.apk" > "Zapdrop-${GITHUB_REF_NAME}-release.apk.sha256"
           else
             echo "Error: No APK generated!"
             exit 1
