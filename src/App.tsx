@@ -24,7 +24,20 @@ import { TransferProgressModal } from './components/TransferProgressModal';
 export default function App() {
   const detectedOs = PlatformBridge.getDetectedOS();
 
-  // Local device profile state
+  // Screen size detection: Desktop (>= 1024px) vs Phone / Tablet (< 1024px)
+  const [isDesktopView, setIsDesktopView] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktopView(window.innerWidth >= 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Device profile state
   const [myProfile, setMyProfile] = useState<DeviceProfile>(() => {
     const saved = localStorage.getItem('zapdrop_profile');
     if (saved) {
@@ -34,27 +47,19 @@ export default function App() {
     }
     return {
       id: 'self-dev-' + Math.random().toString(36).substring(2, 7),
-      name: detectedOs === 'android' ? 'Galaxy S24 Ultra' : 'Studio MacBook Pro',
+      name: detectedOs === 'android' ? 'Galaxy S24' : 'MacBook Pro',
       avatar: AVATAR_PRESETS[0],
-      avatarColor: '#22c55e',
       os: detectedOs,
-      model: detectedOs === 'android' ? 'Snapdragon 8 Gen 3 • Wi-Fi 7' : 'Apple M3 Max • Wi-Fi 6E',
-      ipAddress: '192.168.43.14',
-      isHost: false,
       signalStrength: 99,
       status: 'online',
     };
   });
 
-  // Hotspot status state
+  // Hotspot state
   const [hotspotState, setHotspotState] = useState<HotspotState>(() => ({
     enabled: false,
-    ssid: 'Zapdrop-Hotspot-5G',
+    ssid: 'Zapdrop-Hotspot',
     password: 'zap-speed-889',
-    band: '5GHz',
-    ipAddress: '192.168.43.1',
-    port: 8080,
-    connectedClients: 2,
   }));
 
   // Discovered peers
@@ -83,17 +88,15 @@ export default function App() {
     return INITIAL_TRANSFERS;
   });
 
-  // Navigation and Modals state
+  // Active tab (Default: files / home folder screen above navigation)
   const [activeTab, setActiveTab] = useState<ActiveTab>('files');
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [currentTransfer, setCurrentTransfer] = useState<TransferRecord | null>(null);
 
-  // Real-time transfer timer reference
   const transferIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Save profile & transfers to localStorage
   useEffect(() => {
     localStorage.setItem('zapdrop_profile', JSON.stringify(myProfile));
   }, [myProfile]);
@@ -101,36 +104,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('zapdrop_transfers', JSON.stringify(transfers));
   }, [transfers]);
-
-  // BroadcastChannel for real-time multi-tab/device sync
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      const channel = new BroadcastChannel('zapdrop_p2p_mesh');
-
-      // Announce presence
-      channel.postMessage({
-        type: 'HEARTBEAT',
-        profile: myProfile,
-      });
-
-      channel.onmessage = (event) => {
-        const data = event.data;
-        if (data.type === 'HEARTBEAT' && data.profile && data.profile.id !== myProfile.id) {
-          setPeers((prev) => {
-            const exists = prev.some((p) => p.id === data.profile.id);
-            if (!exists) {
-              return [data.profile, ...prev];
-            }
-            return prev.map((p) => (p.id === data.profile.id ? { ...p, ...data.profile } : p));
-          });
-        }
-      };
-
-      return () => {
-        channel.close();
-      };
-    }
-  }, [myProfile]);
 
   // File selection toggles
   const handleToggleSelectFile = (file: DeviceFile) => {
@@ -161,17 +134,64 @@ export default function App() {
     setSelectedFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  // Start Transfer Simulation / Engine
-  const handleStartTransfer = (targetPeer: DeviceProfile, filesToSend: DeviceFile[]) => {
-    const mainFile = filesToSend[0];
+  // SEND CLICK: Automatically turn on hotspot and open clean centered QR code
+  const handleOpenSend = () => {
+    setHotspotState((prev) => ({ ...prev, enabled: true }));
+    setIsSendModalOpen(true);
+  };
+
+  // RECEIVE CLICK: Turn on WiFi / scan nearby devices
+  const handleOpenReceive = () => {
+    setIsReceiveModalOpen(true);
+  };
+
+  // Connect to a device clicked in the scan to start receiving/transferring
+  const handleConnectDevice = (targetPeer: DeviceProfile) => {
+    const mockFile: DeviceFile = {
+      id: 'rx-' + Date.now(),
+      name: 'Shared_Archive.zip',
+      path: '/storage/emulated/0/Downloads/Shared_Archive.zip',
+      size: 42000000,
+      modifiedDate: 'Today',
+      category: 'archives',
+      mimeType: 'application/zip',
+      isDirectory: false,
+      extension: 'zip',
+    };
+
+    const newTransfer: TransferRecord = {
+      id: 'rx-' + Date.now(),
+      fileName: mockFile.name,
+      fileSize: mockFile.size,
+      fileType: mockFile.mimeType,
+      category: mockFile.category,
+      senderId: targetPeer.id,
+      senderName: targetPeer.name,
+      senderAvatar: targetPeer.avatar,
+      senderOs: targetPeer.os,
+      receiverId: myProfile.id,
+      receiverName: myProfile.name,
+      receiverAvatar: myProfile.avatar,
+      receiverOs: myProfile.os,
+      direction: 'received',
+      timestamp: Date.now(),
+      dateLabel: 'Today, Just now',
+      status: 'transferring',
+      progress: 0,
+      speedMbps: 58.4,
+    };
+
+    setCurrentTransfer(newTransfer);
+    simulateTransferProgress(newTransfer);
+  };
+
+  const handleStartTransferWithFiles = (targetPeer: DeviceProfile, filesToSend: DeviceFile[]) => {
+    const mainFile = filesToSend[0] || files[0];
     const totalSize = filesToSend.reduce((sum, f) => sum + f.size, 0);
 
     const newTransfer: TransferRecord = {
       id: 'tx-' + Date.now(),
-      fileName:
-        filesToSend.length === 1
-          ? mainFile.name
-          : `${mainFile.name} + ${filesToSend.length - 1} other files`,
+      fileName: filesToSend.length === 1 ? mainFile.name : `${mainFile.name} + ${filesToSend.length - 1} files`,
       fileSize: totalSize,
       fileType: mainFile.mimeType,
       category: mainFile.category,
@@ -188,42 +208,7 @@ export default function App() {
       dateLabel: 'Today, Just now',
       status: 'transferring',
       progress: 0,
-      speedMbps: 54.2 + (Math.random() * 15 - 7),
-    };
-
-    setCurrentTransfer(newTransfer);
-    simulateTransferProgress(newTransfer);
-  };
-
-  // Accept incoming transfer
-  const handleAcceptIncoming = (sender: DeviceProfile) => {
-    const mockIncomingFile = {
-      fileName: 'Shared_Project_Archive_4K.zip',
-      fileSize: 45000000,
-      category: 'archives' as const,
-      mimeType: 'application/zip',
-    };
-
-    const newTransfer: TransferRecord = {
-      id: 'rx-' + Date.now(),
-      fileName: mockIncomingFile.fileName,
-      fileSize: mockIncomingFile.fileSize,
-      fileType: mockIncomingFile.mimeType,
-      category: mockIncomingFile.category,
-      senderId: sender.id,
-      senderName: sender.name,
-      senderAvatar: sender.avatar,
-      senderOs: sender.os,
-      receiverId: myProfile.id,
-      receiverName: myProfile.name,
-      receiverAvatar: myProfile.avatar,
-      receiverOs: myProfile.os,
-      direction: 'received',
-      timestamp: Date.now(),
-      dateLabel: 'Today, Just now',
-      status: 'transferring',
-      progress: 0,
-      speedMbps: 61.8 + (Math.random() * 12 - 6),
+      speedMbps: 54.0,
     };
 
     setCurrentTransfer(newTransfer);
@@ -237,7 +222,7 @@ export default function App() {
 
     let currentProgress = 0;
     transferIntervalRef.current = setInterval(() => {
-      currentProgress += 12 + Math.random() * 8;
+      currentProgress += 14 + Math.random() * 8;
       if (currentProgress >= 100) {
         currentProgress = 100;
         if (transferIntervalRef.current) clearInterval(transferIntervalRef.current);
@@ -256,12 +241,11 @@ export default function App() {
             ? {
                 ...prev,
                 progress: currentProgress,
-                speedMbps: 50 + (Math.random() * 20 - 10),
               }
             : null
         );
       }
-    }, 300);
+    }, 280);
   };
 
   const handleCancelTransfer = () => {
@@ -272,7 +256,6 @@ export default function App() {
   };
 
   const handleDownloadCompleted = (record: TransferRecord) => {
-    // Create a mock blob download
     const blob = new Blob([`Zapdrop transfer data for ${record.fileName}`], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -282,25 +265,17 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  const handleToggleHotspot = () => {
-    setHotspotState((prev) => ({
-      ...prev,
-      enabled: !prev.enabled,
-    }));
-  };
-
   return (
     <div className="min-h-screen bg-[#121316] text-[#e2e8f0] flex flex-col selection:bg-[#22c55e] selection:text-black">
-      {/* Top App Header */}
+      {/* Clean Minimalist Header */}
       <Header
         myProfile={myProfile}
         hotspotState={hotspotState}
-        onToggleHotspot={handleToggleHotspot}
         onOpenProfile={() => setActiveTab('profile')}
-        activeTransferSpeed={currentTransfer?.status === 'transferring' ? currentTransfer.speedMbps : 0}
+        isDesktopView={isDesktopView}
       />
 
-      {/* Main App View Area */}
+      {/* Main Screen Content (Folders/Files Explorer is the default view above navigation) */}
       <main className="flex-1 w-full relative">
         {activeTab === 'files' && (
           <DeviceExplorer
@@ -311,7 +286,7 @@ export default function App() {
             onClearSelection={handleClearSelection}
             onOpenSendWithFiles={(filesToSend) => {
               setSelectedFiles(filesToSend);
-              setIsSendModalOpen(true);
+              handleOpenSend();
             }}
             onAddNewFiles={handleAddNewFiles}
             onDeleteFile={handleDeleteFile}
@@ -324,8 +299,7 @@ export default function App() {
             onClearHistory={() => setTransfers([])}
             onDeleteTransfer={(id) => setTransfers((prev) => prev.filter((t) => t.id !== id))}
             onResend={(record) => {
-              const matchedPeer =
-                peers.find((p) => p.id === record.receiverId || p.id === record.senderId) || peers[0];
+              const matchedPeer = peers[0];
               const mockFile: DeviceFile = {
                 id: 'resend-' + Date.now(),
                 name: record.fileName,
@@ -337,7 +311,7 @@ export default function App() {
                 isDirectory: false,
                 extension: record.fileName.split('.').pop() || 'bin',
               };
-              handleStartTransfer(matchedPeer, [mockFile]);
+              handleStartTransferWithFiles(matchedPeer, [mockFile]);
             }}
           />
         )}
@@ -352,47 +326,39 @@ export default function App() {
         )}
       </main>
 
-      {/* Central Curved Cutout Bottom Navigation Bar */}
+      {/* 3-Icon Curved Bottom Navigation Bar (History, Share, Profile) */}
       <BottomNav
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setActiveTab(tab);
           setIsActionMenuOpen(false);
         }}
-        onOpenSend={() => setIsSendModalOpen(true)}
-        onOpenReceive={() => setIsReceiveModalOpen(true)}
-        onToggleHotspot={handleToggleHotspot}
-        isHotspotActive={hotspotState.enabled}
+        onOpenSend={handleOpenSend}
+        onOpenReceive={handleOpenReceive}
         isActionMenuOpen={isActionMenuOpen}
         setIsActionMenuOpen={setIsActionMenuOpen}
-        pendingTransferCount={transfers.filter((t) => t.status === 'transferring').length}
+        isDesktopView={isDesktopView}
       />
 
-      {/* Send Modal (QR Code & Nearby Devices) */}
+      {/* Clean Centered Send QR Code Modal */}
       <SendModal
         isOpen={isSendModalOpen}
         onClose={() => setIsSendModalOpen(false)}
         selectedFiles={selectedFiles.length > 0 ? selectedFiles : files.slice(0, 1)}
-        peers={peers}
         hotspotState={hotspotState}
         myProfile={myProfile}
-        onStartTransfer={handleStartTransfer}
-        onPickMoreFiles={() => {
-          setIsSendModalOpen(false);
-          setActiveTab('files');
-        }}
       />
 
-      {/* Receive Modal (Sonar Radar Scanner & QR Reader) */}
+      {/* Radar Scan Receive Modal */}
       <ReceiveModal
         isOpen={isReceiveModalOpen}
         onClose={() => setIsReceiveModalOpen(false)}
         myProfile={myProfile}
         peers={peers}
-        onAcceptIncoming={handleAcceptIncoming}
+        onConnectDevice={handleConnectDevice}
       />
 
-      {/* Live Transfer Progress & Completion Modal */}
+      {/* Transfer Progress & Completion Modal */}
       <TransferProgressModal
         currentTransfer={currentTransfer}
         onCancel={handleCancelTransfer}

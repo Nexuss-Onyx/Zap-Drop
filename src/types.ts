@@ -4,14 +4,9 @@ export interface DeviceProfile {
   id: string;
   name: string;
   avatar: string;
-  avatarColor: string;
   os: OSPlatform;
-  model: string;
-  ipAddress: string;
-  isHost: boolean;
-  signalStrength: number; // in percentage e.g. 95%
+  signalStrength: number;
   status: 'online' | 'busy' | 'pairing';
-  lastSeen?: number;
 }
 
 export type FileCategory = 'all' | 'images' | 'videos' | 'audio' | 'documents' | 'apps' | 'archives';
@@ -20,7 +15,7 @@ export interface DeviceFile {
   id: string;
   name: string;
   path: string;
-  size: number; // in bytes
+  size: number;
   modifiedDate: string;
   category: FileCategory;
   mimeType: string;
@@ -28,14 +23,6 @@ export interface DeviceFile {
   previewUrl?: string;
   blob?: Blob;
   extension: string;
-}
-
-export interface FolderNode {
-  name: string;
-  path: string;
-  icon: string;
-  itemsCount: number;
-  totalSize: string;
 }
 
 export interface TransferRecord {
@@ -56,20 +43,22 @@ export interface TransferRecord {
   timestamp: number;
   dateLabel: string;
   status: 'transferring' | 'completed' | 'failed' | 'cancelled';
-  progress: number; // 0 - 100
+  progress: number;
   speedMbps: number;
-  timeRemainingSec?: number;
-  blobUrl?: string;
+}
+
+export interface FolderNode {
+  name: string;
+  path: string;
+  icon: string;
+  itemsCount: number;
+  totalSize: string;
 }
 
 export interface HotspotState {
   enabled: boolean;
   ssid: string;
   password: string;
-  band: '5GHz' | '2.4GHz';
-  ipAddress: string;
-  port: number;
-  connectedClients: number;
 }
 
-export type ActiveTab = 'files' | 'history' | 'profile' | 'hotspot';
+export type ActiveTab = 'files' | 'history' | 'profile';
