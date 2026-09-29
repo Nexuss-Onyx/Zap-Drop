@@ -134,7 +134,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </button>
             </motion.div>
           ) : (
-            /* EXPANDED FULL RADAR CARD: CLEAN, NO PULSE, WITH COLLAPSE & CLOSE AT TOP RIGHT */
+            /* EXPANDED FULL RADAR CARD: COLLAPSE ICON AT LEFT, CLOSE AT RIGHT */
             <motion.div
               key="receive-expanded-card"
               initial={{ opacity: 0, y: 25, scale: 0.95 }}
@@ -143,31 +143,28 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
               className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md"
             >
-              {/* Header Bar with Static Indicator + Collapse and Close Buttons at Right */}
+              {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
+                  <button
+                    onClick={() => setIsCollapsed(true)}
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
+                    title="Collapse down"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
                   <span className="text-[10px] font-bold text-slate-300">
                     Nearby Devices ({peers.length})
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setIsCollapsed(true)}
-                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
-                    title="Collapse"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
-                  <button
-                    onClick={handleAttemptClose}
-                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                    title="Close"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
+                <button
+                  onClick={handleAttemptClose}
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                  title="Close"
+                >
+                  <X size={13} />
+                </button>
               </div>
 
               {/* Clean Scattered Radar Canvas without pulses */}
