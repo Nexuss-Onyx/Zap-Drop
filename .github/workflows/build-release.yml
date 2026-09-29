@@ -10,6 +10,8 @@ on:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,21 +47,17 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
-      - name: Sign Release APK
-        uses: ralfirza/apk-signer@v1
-        with:
-          apk-file: android/app/build/outputs/apk/release/app-release-unsigned.apk
-        continue-on-error: true
-
-      - name: Rename & Prepare Artifacts
+      - name: Prepare Artifacts & Checksum
         run: |
           mkdir -p artifacts
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk artifacts/Zapdrop-v1.0-release.apk
-          elif [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release-unsigned.apk artifacts/Zapdrop-v1.0-release.apk
+          APK_FILE=$(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1)
+          if [ -n "$APK_FILE" ]; then
+            cp "$APK_FILE" artifacts/Zapdrop-v1.0-release.apk
+            cd artifacts && sha256sum Zapdrop-v1.0-release.apk > Zapdrop-v1.0-release.apk.sha256
+          else
+            echo "Error: No APK generated!"
+            exit 1
           fi
-          cd artifacts && sha256sum Zapdrop-v1.0-release.apk > Zapdrop-v1.0-release.apk.sha256
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -74,21 +72,18 @@ jobs:
           tag_name: v1.0.0
           name: "Zapdrop v1.0.0 (Android 5.1+ / API 22+)"
           body: |
-            ## Zapdrop v1.0.0 Release
+            ## Zapdrop v1.0.0 Release (Android 5.1+ / API 22+)
             
-            - **Target Platform**: Android 5.1+ (API Level 22 through API 34+)
-            - **Framework**: Capacitor 6.2 + React + Vite + Tailwind CSS
-            - **Features**:
-              - High-speed offline P2P transfer (NanoHTTPD)
-              - In-app folder and media explorer (MediaStore)
-              - MLKit QR code camera scanner & direct Wi-Fi radar
-              - Background transfer support & local notifications
+            - **Platform**: Android 5.1+ (API Level 22 through API 34+)
+            - **Engine**: Capacitor 6.2 + React + Vite + Tailwind CSS + NanoHTTPD
+            - **Key Features**:
+              - In-app MediaStore explorer (Photos, Videos, Audio, Docs, APKs)
+              - Embedded local HTTP file streaming server
+              - QR code camera scanner & UDP radar peer discovery
+              - Background transfer & notification support
             
             ### Artifacts:
             - `Zapdrop-v1.0-release.apk`
-            
-            ### SHA-256 Checksum:
-            See attached `.sha256` file.
           files: |
             artifacts/Zapdrop-v1.0-release.apk
             artifacts/Zapdrop-v1.0-release.apk.sha256
