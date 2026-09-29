@@ -112,7 +112,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
           className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
         >
           {isCollapsed ? (
-            /* COLLAPSED BUTTON VIEW - FLUID IN-PLACE TRANSITION */
+            /* COLLAPSED BUTTON VIEW - CHEVRON UP ON LEFT */
             <motion.div
               layout
               initial={{ opacity: 0 }}
@@ -122,37 +122,27 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#2ee86f]" />
+                <div className="p-1 rounded-lg neu-pressed text-[#2ee86f]">
+                  <ChevronUp size={13} />
+                </div>
                 <span className="text-xs font-bold text-white group-hover:text-[#2ee86f] transition-colors">
                   Tap to view Devices ({peers.length})
                 </span>
               </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsCollapsed(false);
-                  }}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
-                  title="Expand"
-                >
-                  <ChevronUp size={13} />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAttemptClose();
-                  }}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                  title="Exit"
-                >
-                  <X size={13} />
-                </button>
-              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAttemptClose();
+                }}
+                className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                title="Exit"
+              >
+                <X size={13} />
+              </button>
             </motion.div>
           ) : (
-            /* EXPANDED FULL RADAR CARD VIEW - FLUID IN-PLACE TRANSITION */
+            /* EXPANDED FULL RADAR CARD VIEW */
             <motion.div
               layout
               initial={{ opacity: 0 }}
