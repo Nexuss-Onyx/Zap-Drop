@@ -101,19 +101,19 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Docked Modal or Collapsed Action Button - Hovering Right Above Nav Bar */}
-      <div className="fixed bottom-[52px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Floating cleanly above the elevated center Share button and nav bar */}
+      <div className="fixed bottom-[88px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
-            /* COLLAPSED BUTTON: EXACT 280PX WIDTH, HOVERING JUST A BIT ABOVE NAV */
+            /* COLLAPSED BUTTON: EXACT 280PX WIDTH, RESTING CLEARLY ABOVE NAV BAR */
             <motion.div
               key="receive-collapsed-button"
-              initial={{ opacity: 0, y: 15, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
               onClick={() => setIsCollapsed(false)}
-              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/98 shadow-[0_6px_25px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
+              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/98 shadow-[0_8px_30px_rgba(0,0,0,0.9)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#2ee86f]" />
@@ -134,14 +134,14 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </button>
             </motion.div>
           ) : (
-            /* EXPANDED FULL RADAR CARD: COLLAPSE ICON AT LEFT, CLOSE AT RIGHT */
+            /* EXPANDED FULL RADAR CARD: SITTING DIRECTLY ABOVE NAV BAR */
             <motion.div
               key="receive-expanded-card"
-              initial={{ opacity: 0, y: 25, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 25, scale: 0.92 }}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md"
+              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] flex flex-col items-center text-center backdrop-blur-md"
             >
               {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
@@ -149,7 +149,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                   <button
                     onClick={() => setIsCollapsed(true)}
                     className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
-                    title="Collapse down"
+                    title="Collapse"
                   >
                     <ChevronDown size={13} />
                   </button>
