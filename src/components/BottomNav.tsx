@@ -17,10 +17,11 @@ interface BottomNavProps {
 }
 
 /**
- * Brand Logo: Minimalist Luxury Hotspot + Download Drop Geometric Beacon
+ * Combined Modern Minimalist Luxurious Brand Logo:
+ * Seamless synthesis of Image 1 (Notched Bar Base with twin nodes) + Image 2 (Concentric Hotspot Radio Arcs & Transmitter).
  */
 export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
-  size = 20,
+  size = 24,
   className = '',
 }) => (
   <svg
@@ -32,40 +33,62 @@ export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
     className={className}
   >
     <defs>
-      <linearGradient id="zapBrandGrad" x1="15" y1="15" x2="85" y2="85" gradientUnits="userSpaceOnUse">
+      <linearGradient id="zapCombinedGrad" x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
         <stop offset="0%" stopColor="#2ee86f" />
-        <stop offset="60%" stopColor="#4ade80" />
+        <stop offset="50%" stopColor="#4ade80" />
         <stop offset="100%" stopColor="#ffffff" />
       </linearGradient>
+      <linearGradient id="zapArcGrad" x1="20" y1="15" x2="80" y2="15" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor="#2ee86f" />
+        <stop offset="50%" stopColor="#ffffff" />
+        <stop offset="100%" stopColor="#2ee86f" />
+      </linearGradient>
     </defs>
-    {/* Concentric Hotspot Wave Arcs */}
+
+    {/* Concentric Hotspot Radio Wave Arcs (Image 2) */}
+    {/* Outer Arc */}
     <path
-      d="M22 34C30.2 24.8 40.4 19 50 19C59.6 19 69.8 24.8 78 34"
-      stroke="url(#zapBrandGrad)"
-      strokeWidth="6"
+      d="M20 36C27.5 22.5 38 16 50 16C62 16 72.5 22.5 80 36"
+      stroke="url(#zapArcGrad)"
+      strokeWidth="5.5"
       strokeLinecap="round"
     />
+    {/* Inner Arc */}
     <path
-      d="M33 45C38 40 43.8 37 50 37C56.2 37 62 40 67 45"
+      d="M31 41C36 32 42.5 27 50 27C57.5 27 64 32 69 41"
       stroke="#2ee86f"
-      strokeWidth="5"
+      strokeWidth="4.5"
       strokeLinecap="round"
     />
-    {/* Download Drop Arrow */}
+
+    {/* Central Transmitter Node (Image 2) */}
+    <circle
+      cx="50"
+      cy="45"
+      r="6.5"
+      fill="#ffffff"
+    />
+
+    {/* Vertical Transmitter Stem + Inverted-Y Antenna Base (Image 2) */}
     <path
-      d="M50 38V66M50 66L39 54M50 66L61 54"
+      d="M50 51.5V63M50 63L39 74M50 63L61 74"
       stroke="#ffffff"
-      strokeWidth="6.5"
+      strokeWidth="5"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
-    {/* Receiver Tray */}
+
+    {/* Notched Docking Bar Base (Image 1) */}
     <path
-      d="M26 73C26 77.4183 29.5817 81 34 81H66C70.4183 81 74 77.4183 74 73"
-      stroke="url(#zapBrandGrad)"
-      strokeWidth="6"
-      strokeLinecap="round"
+      d="M10 73C10 68.5817 13.5817 65 18 65H35L44 74C47.5 77.5 52.5 77.5 56 74L65 65H82C86.4183 65 90 68.5817 90 73V81C90 85.4183 86.4183 89 82 89H18C13.5817 89 10 85.4183 10 81V73Z"
+      fill="#141720"
+      stroke="url(#zapCombinedGrad)"
+      strokeWidth="3.5"
     />
+
+    {/* Twin Indicator Nodes on the Right (Image 1) */}
+    <circle cx="73" cy="77" r="3.5" fill="#2ee86f" />
+    <circle cx="83" cy="77" r="3.5" fill="#2ee86f" />
   </svg>
 );
 
