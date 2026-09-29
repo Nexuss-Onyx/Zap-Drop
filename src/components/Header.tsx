@@ -30,18 +30,20 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-30 w-full px-4 pt-3 pb-3 bg-[#121316]/90 backdrop-blur-md border-b border-white/5">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
         
-        {/* Brand Logo & Clean Subtitle */}
+        {/* Brand Logo & Clean Subtitle (No Pulse, No 'Ready to share') */}
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#22c55e] to-[#2ee86f] flex items-center justify-center neu-raised shadow-[0_0_16px_rgba(46,232,111,0.4)]">
-            <ZapShareIcon size={18} color="#0d0e12" />
+          <div className="w-9 h-9 rounded-2xl bg-[#1a1d26] border border-[#2ee86f]/30 flex items-center justify-center neu-raised shadow-[0_0_16px_rgba(46,232,111,0.25)]">
+            <ZapShareIcon size={20} />
           </div>
           <div>
             <h1 className="text-base font-bold tracking-tight text-white leading-tight">
               Zapdrop
             </h1>
             <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full ${hotspotState.enabled ? 'bg-[#2ee86f] animate-pulse' : 'bg-[#2ee86f]'}`} />
-              <span>{hotspotState.enabled ? 'Hotspot Active' : isDesktopView ? 'Desktop Receiver' : 'Ready to share'}</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
+              <span className="text-slate-300 font-medium">
+                {hotspotState.enabled ? 'Hotspot Active' : isDesktopView ? 'Desktop Receiver' : 'Offline Direct P2P'}
+              </span>
             </div>
           </div>
         </div>
