@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, AlertCircle } from 'lucide-react';
+import { X, ChevronDown, AlertCircle } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/mockNetwork';
 
@@ -79,19 +79,19 @@ export const SendModal: React.FC<SendModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Docked Modal or Collapsed Action Button */}
-      <div className="fixed bottom-[48px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Docked Modal or Collapsed Action Button - Perfectly Hovering Right Above Nav Bar */}
+      <div className="fixed bottom-[52px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
-            /* COLLAPSED STATE: JUST A SLEEK BUTTON (NO QR CODE, NO FULL CARD) */
+            /* COLLAPSED BUTTON: EXACT 280PX WIDTH, HOVERING JUST A BIT ABOVE NAV */
             <motion.div
               key="send-collapsed-button"
-              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              initial={{ opacity: 0, y: 15, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              exit={{ opacity: 0, y: 15, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
               onClick={() => setIsCollapsed(false)}
-              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_6px_25px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all mb-1"
+              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/98 shadow-[0_6px_25px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#2ee86f]" />
@@ -112,16 +112,16 @@ export const SendModal: React.FC<SendModalProps> = ({
               </button>
             </motion.div>
           ) : (
-            /* EXPANDED STATE: CLEAN SMALL CARD WITHOUT COLLAPSE ICONS */
+            /* EXPANDED FULL CARD: CLEAN, NO PULSE, WITH COLLAPSE & CLOSE AT TOP RIGHT */
             <motion.div
               key="send-expanded-card"
               initial={{ opacity: 0, y: 25, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 25, scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md mb-1"
+              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md"
             >
-              {/* Clean Header with Only Cancel/Close Button */}
+              {/* Header Bar with Static Indicator + Collapse and Close Buttons at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1.5">
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
@@ -130,13 +130,22 @@ export const SendModal: React.FC<SendModalProps> = ({
                   </span>
                 </div>
 
-                <button
-                  onClick={handleAttemptClose}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                  title="Close"
-                >
-                  <X size={13} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setIsCollapsed(true)}
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
+                    title="Collapse"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                  <button
+                    onClick={handleAttemptClose}
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Close"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               </div>
 
               {/* Profile & Files line */}
@@ -156,7 +165,7 @@ export const SendModal: React.FC<SendModalProps> = ({
                 </div>
               </div>
 
-              {/* Small QR Code */}
+              {/* Small Clean QR Code */}
               <div className="p-2 bg-white rounded-2xl shadow-lg my-0.5">
                 <QRCodeSVG
                   value={qrPayload}

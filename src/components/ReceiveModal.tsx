@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, Smartphone, Monitor } from 'lucide-react';
+import { X, ChevronDown, AlertCircle, Smartphone, Monitor } from 'lucide-react';
 import { DeviceProfile, OSPlatform } from '../types';
 
 interface ReceiveModalProps {
@@ -101,19 +101,19 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Docked Modal or Collapsed Action Button */}
-      <div className="fixed bottom-[48px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Docked Modal or Collapsed Action Button - Hovering Right Above Nav Bar */}
+      <div className="fixed bottom-[52px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
-            /* COLLAPSED STATE: JUST A SLEEK BUTTON (NO RADAR, NO FULL CARD) */
+            /* COLLAPSED BUTTON: EXACT 280PX WIDTH, HOVERING JUST A BIT ABOVE NAV */
             <motion.div
               key="receive-collapsed-button"
-              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              initial={{ opacity: 0, y: 15, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              exit={{ opacity: 0, y: 15, scale: 0.96 }}
               transition={{ type: 'spring', stiffness: 420, damping: 28 }}
               onClick={() => setIsCollapsed(false)}
-              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_6px_25px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all mb-1"
+              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/98 shadow-[0_6px_25px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#2ee86f]" />
@@ -134,16 +134,16 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </button>
             </motion.div>
           ) : (
-            /* EXPANDED STATE: CLEAN SMALL RADAR CARD WITHOUT COLLAPSE ICONS */
+            /* EXPANDED FULL RADAR CARD: CLEAN, NO PULSE, WITH COLLAPSE & CLOSE AT TOP RIGHT */
             <motion.div
               key="receive-expanded-card"
               initial={{ opacity: 0, y: 25, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 25, scale: 0.92 }}
               transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md mb-1"
+              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md"
             >
-              {/* Header Bar with Only Cancel/Close Button */}
+              {/* Header Bar with Static Indicator + Collapse and Close Buttons at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
                 <div className="flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
@@ -152,16 +152,25 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                   </span>
                 </div>
 
-                <button
-                  onClick={handleAttemptClose}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                  title="Close"
-                >
-                  <X size={13} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setIsCollapsed(true)}
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
+                    title="Collapse"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+                  <button
+                    onClick={handleAttemptClose}
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                    title="Close"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               </div>
 
-              {/* Clean Scattered Radar Canvas */}
+              {/* Clean Scattered Radar Canvas without pulses */}
               <div className="relative w-44 h-44 flex items-center justify-center my-1 overflow-visible">
                 {/* Clean Static Radar Rings */}
                 <div className="absolute w-40 h-40 rounded-full border border-white/5 pointer-events-none" />
