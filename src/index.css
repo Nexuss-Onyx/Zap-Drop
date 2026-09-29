@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Neumorphic Dark Mode Utilities */
+.neu-flat {
+  background: #18191f;
+  box-shadow: 6px 6px 14px rgba(0, 0, 0, 0.6), -4px -4px 10px rgba(255, 255, 255, 0.03);
+}
+
+.neu-raised {
+  background: linear-gradient(145deg, #1b1c23, #15161b);
+  box-shadow: 7px 7px 16px rgba(0, 0, 0, 0.65), -5px -5px 12px rgba(255, 255, 255, 0.035);
+}
+
+.neu-raised-sm {
+  background: #1a1b22;
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.55), -3px -3px 6px rgba(255, 255, 255, 0.03);
+}
+
+.neu-pressed {
+  background: #14151a;
+  box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.75), inset -3px -3px 6px rgba(255, 255, 255, 0.025);
+}
+
+.neu-pressed-green {
+  background: #13241b;
+  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.8), inset -2px -2px 5px rgba(34, 197, 94, 0.15);
+}
+
+.neu-btn {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.neu-btn:active {
+  box-shadow: inset 3px 3px 6px rgba(0, 0, 0, 0.8), inset -2px -2px 5px rgba(255, 255, 255, 0.03);
+  transform: translateY(1px);
+}
+
+.glow-green {
+  box-shadow: 0 0 25px rgba(34, 197, 94, 0.45), 0 0 50px rgba(34, 197, 94, 0.15);
+}
+
+.glow-green-sm {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.35);
+}
+
+/* Radar pulse animation */
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+.animate-radar {
+  animation: radar-pulse 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.animate-radar-delayed {
+  animation: radar-pulse 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 1s;
+}
+
+.animate-radar-delayed-2 {
+  animation: radar-pulse 3s cubic-bezier(0.2, 0.8, 0.2, 1) infinite 2s;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #121316;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #252833;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #373b4d;
+}
+

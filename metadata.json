@@ -1,0 +1,6 @@
+{
+  "name": "Zapdrop - Cross-Platform Instant P2P File & Data Sharing",
+  "description": "Seamless high-speed local Wi-Fi & Hotspot data transfer between Android and Desktop devices with dark neumorphic aesthetic, QR pairing, and deep folder explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
