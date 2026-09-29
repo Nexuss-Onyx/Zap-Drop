@@ -11,6 +11,9 @@ interface BottomNavProps {
   isActionMenuOpen: boolean;
   setIsActionMenuOpen: (open: boolean) => void;
   isDesktopView: boolean;
+  isCardOpen?: boolean;
+  isCardCollapsed?: boolean;
+  onToggleCardCollapse?: () => void;
 }
 
 // Custom exact Share Icon matching user's uploaded reference (Curved arrow springing out of open container box)
@@ -48,6 +51,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   isActionMenuOpen,
   setIsActionMenuOpen,
   isDesktopView,
+  isCardOpen = false,
+  isCardCollapsed = false,
+  onToggleCardCollapse,
 }) => {
   // 3 Icons only: History (Left), Share (Center), Profile (Right)
   const tabs = [
@@ -56,11 +62,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'profile' as const, icon: User, label: 'Profile' },
   ];
 
-  const activeIndex = activeTab === 'history' ? 0 : activeTab === 'profile' ? 2 : 1;
-
   const handleCenterShareClick = () => {
     if (isDesktopView) {
       onOpenReceive();
+    } else if (isCardOpen && onToggleCardCollapse) {
+      onToggleCardCollapse();
     } else {
       setIsActionMenuOpen(!isActionMenuOpen);
     }

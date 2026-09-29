@@ -91,9 +91,22 @@ export default function App() {
   // Active tab (Default: files / home folder screen above navigation)
   const [activeTab, setActiveTab] = useState<ActiveTab>('files');
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isSendCollapsed, setIsSendCollapsed] = useState(false);
   const [isReceiveModalOpen, setIsReceiveModalOpen] = useState(false);
+  const [isReceiveCollapsed, setIsReceiveCollapsed] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [currentTransfer, setCurrentTransfer] = useState<TransferRecord | null>(null);
+
+  const isCardActive = isSendModalOpen || isReceiveModalOpen;
+  const isAnyCardCollapsed = (isSendModalOpen && isSendCollapsed) || (isReceiveModalOpen && isReceiveCollapsed);
+
+  const handleToggleCardCollapse = () => {
+    if (isReceiveModalOpen) {
+      setIsReceiveCollapsed((prev) => !prev);
+    } else if (isSendModalOpen) {
+      setIsSendCollapsed((prev) => !prev);
+    }
+  };
 
   const transferIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -137,11 +150,15 @@ export default function App() {
   // SEND CLICK: Automatically turn on hotspot and open clean centered QR code
   const handleOpenSend = () => {
     setHotspotState((prev) => ({ ...prev, enabled: true }));
+    setIsReceiveModalOpen(false);
+    setIsSendCollapsed(false);
     setIsSendModalOpen(true);
   };
 
   // RECEIVE CLICK: Turn on WiFi / scan nearby devices
   const handleOpenReceive = () => {
+    setIsSendModalOpen(false);
+    setIsReceiveCollapsed(false);
     setIsReceiveModalOpen(true);
   };
 
@@ -338,24 +355,37 @@ export default function App() {
         isActionMenuOpen={isActionMenuOpen}
         setIsActionMenuOpen={setIsActionMenuOpen}
         isDesktopView={isDesktopView}
+        isCardOpen={isCardActive}
+        isCardCollapsed={isAnyCardCollapsed}
+        onToggleCardCollapse={handleToggleCardCollapse}
       />
 
       {/* Clean Centered Send QR Code Modal */}
       <SendModal
         isOpen={isSendModalOpen}
-        onClose={() => setIsSendModalOpen(false)}
+        onClose={() => {
+          setIsSendModalOpen(false);
+          setIsSendCollapsed(false);
+        }}
         selectedFiles={selectedFiles.length > 0 ? selectedFiles : files.slice(0, 1)}
         hotspotState={hotspotState}
         myProfile={myProfile}
+        isCollapsed={isSendCollapsed}
+        setIsCollapsed={setIsSendCollapsed}
       />
 
       {/* Radar Scan Receive Modal */}
       <ReceiveModal
         isOpen={isReceiveModalOpen}
-        onClose={() => setIsReceiveModalOpen(false)}
+        onClose={() => {
+          setIsReceiveModalOpen(false);
+          setIsReceiveCollapsed(false);
+        }}
         myProfile={myProfile}
         peers={peers}
         onConnectDevice={handleConnectDevice}
+        isCollapsed={isReceiveCollapsed}
+        setIsCollapsed={setIsReceiveCollapsed}
       />
 
       {/* Transfer Progress & Completion Modal */}
