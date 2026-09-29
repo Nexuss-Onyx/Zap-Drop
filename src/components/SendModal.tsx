@@ -79,8 +79,8 @@ export const SendModal: React.FC<SendModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Positioned directly above the nav bar, behind the elevated Share button (z-30) */}
-      <div className="fixed bottom-[64px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Positioned directly above the nav bar, elevated just enough behind the Share button (z-30) */}
+      <div className="fixed bottom-[76px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
         <motion.div
           layout
           initial={{ opacity: 0, y: 35, scale: 0.92 }}
@@ -90,7 +90,7 @@ export const SendModal: React.FC<SendModalProps> = ({
           className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
         >
           {isCollapsed ? (
-            /* COLLAPSED BUTTON VIEW - SITS DIRECTLY ON NAVBAR, BEHIND SHARE BUTTON */
+            /* COLLAPSED BUTTON VIEW - SITS JUST A BIT HIGHER, PERFECTLY VISIBLE */
             <motion.div
               layout
               initial={{ opacity: 0 }}
