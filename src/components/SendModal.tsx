@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, ChevronDown, ChevronUp, AlertCircle, Radio } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/mockNetwork';
 
@@ -39,49 +39,36 @@ export const SendModal: React.FC<SendModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none flex flex-col justify-end">
-      {/* Dimmed backdrop (only active when not collapsed) */}
-      <AnimatePresence>
-        {!isCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleAttemptClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Confirmation Modal to Exit */}
+    <div className="fixed bottom-20 left-0 right-0 z-50 pointer-events-none flex flex-col items-center px-4">
+      {/* Small Confirmation Popup */}
       <AnimatePresence>
         {showExitConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md pointer-events-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs pointer-events-auto">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-xs neu-raised rounded-3xl border border-white/10 p-5 bg-[#171821] text-center shadow-2xl"
+              className="w-full max-w-[260px] neu-raised rounded-3xl border border-white/10 p-4 bg-[#171821] text-center shadow-2xl"
             >
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-3">
-                <AlertCircle size={22} />
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-2">
+                <AlertCircle size={18} />
               </div>
-              <h3 className="text-sm font-bold text-white mb-1">Stop Sharing?</h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Other devices will no longer be able to scan and receive these files.
+              <h3 className="text-xs font-bold text-white mb-1">Stop Sharing?</h3>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Other devices will stop receiving.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowExitConfirm(false)}
-                  className="flex-1 py-2.5 rounded-2xl neu-flat text-xs font-semibold text-slate-300 hover:text-white"
+                  className="flex-1 py-1.5 rounded-xl neu-flat text-[11px] font-semibold text-slate-300 hover:text-white"
                 >
                   Stay
                 </button>
                 <button
                   onClick={handleConfirmExit}
-                  className="flex-1 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold shadow-md"
+                  className="flex-1 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold"
                 >
-                  Yes, Exit
+                  Exit
                 </button>
               </div>
             </motion.div>
@@ -89,34 +76,32 @@ export const SendModal: React.FC<SendModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Main Bottom Sheet / Small-to-Medium Card */}
-      <div className="w-full max-w-md mx-auto pointer-events-auto px-3 pb-24 z-10">
+      {/* Small Compact Card - Slides & Fades from Down to Up */}
+      <div className="w-full max-w-[320px] pointer-events-auto">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
-            /* COLLAPSED FLOATING PILL */
+            /* COLLAPSED PILL */
             <motion.div
               key="collapsed"
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
+              initial={{ opacity: 0, y: 25, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               onClick={() => setIsCollapsed(false)}
-              className="p-3 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_8px_30px_rgba(0,0,0,0.8)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
+              className="p-2.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_8px_30px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <div className="relative">
                   <img
                     src={myProfile.avatar}
                     alt={myProfile.name}
-                    className="w-8 h-8 rounded-xl object-cover ring-1 ring-[#2ee86f]"
+                    className="w-7 h-7 rounded-lg object-cover ring-1 ring-[#2ee86f]"
                   />
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#2ee86f] ring-2 ring-[#16181f] animate-pulse" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#2ee86f] animate-pulse" />
                 </div>
                 <div className="text-left">
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>Broadcasting QR</span>
-                    <span className="text-[10px] text-[#2ee86f] font-mono">({selectedFiles.length} files)</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400">Tap to expand and scan</div>
+                  <div className="text-[11px] font-bold text-white">QR Broadcast Active</div>
+                  <div className="text-[10px] text-slate-400">Tap to expand</div>
                 </div>
               </div>
 
@@ -126,110 +111,89 @@ export const SendModal: React.FC<SendModalProps> = ({
                     e.stopPropagation();
                     setIsCollapsed(false);
                   }}
-                  className="p-1.5 rounded-xl neu-pressed text-slate-300 hover:text-white"
-                  title="Expand"
+                  className="p-1 rounded-lg neu-pressed text-slate-300 hover:text-white"
                 >
-                  <ChevronUp size={16} />
+                  <ChevronUp size={14} />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleAttemptClose();
                   }}
-                  className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-rose-400"
-                  title="Close"
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
             </motion.div>
           ) : (
-            /* EXPANDED MEDIUM BOTTOM CARD */
+            /* COMPACT SMALL CARD */
             <motion.div
               key="expanded"
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-              className="w-full neu-raised rounded-3xl border border-white/10 p-4 bg-[#16181f]/98 shadow-[0_12px_45px_rgba(0,0,0,0.9)] max-h-[72vh] flex flex-col items-center text-center overflow-y-auto"
+              initial={{ opacity: 0, y: 35, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 25, scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+              className="w-full neu-raised rounded-3xl border border-white/10 p-3.5 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.85)] flex flex-col items-center text-center backdrop-blur-md"
             >
-              {/* Header Action Bar: Collapse & Cancel/Close */}
-              <div className="w-full flex items-center justify-between pb-2 border-b border-white/5 mb-3">
+              {/* Header Bar */}
+              <div className="w-full flex items-center justify-between pb-1.5 border-b border-white/5 mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#2ee86f] animate-pulse" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Broadcasting on Network
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f] animate-pulse" />
+                  <span className="text-[11px] font-bold text-slate-300">
+                    Scan to Receive
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => setIsCollapsed(true)}
-                    className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-white transition-colors"
-                    title="Collapse"
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white"
+                    title="Minimize"
                   >
-                    <ChevronDown size={17} />
+                    <ChevronDown size={14} />
                   </button>
                   <button
                     onClick={handleAttemptClose}
-                    className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                    title="Cancel & Exit"
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400"
+                    title="Close"
                   >
-                    <X size={17} />
+                    <X size={14} />
                   </button>
                 </div>
               </div>
 
-              {/* Profile details */}
-              <div className="flex items-center gap-3 mb-3">
-                <div className="relative shrink-0">
-                  <img
-                    src={myProfile.avatar}
-                    alt={myProfile.name}
-                    className="w-11 h-11 rounded-2xl object-cover ring-2 ring-[#2ee86f]"
-                  />
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#2ee86f] ring-2 ring-[#16181f]" />
-                </div>
+              {/* Profile & Files line */}
+              <div className="flex items-center gap-2 mb-2">
+                <img
+                  src={myProfile.avatar}
+                  alt={myProfile.name}
+                  className="w-8 h-8 rounded-xl object-cover ring-1 ring-[#2ee86f]"
+                />
                 <div className="text-left">
-                  <div className="text-sm font-bold text-white">{myProfile.name}</div>
-                  <div className="text-[11px] text-[#2ee86f] font-mono">
+                  <div className="text-xs font-bold text-white leading-tight">{myProfile.name}</div>
+                  <div className="text-[10px] text-[#2ee86f] font-mono">
                     {selectedFiles.length > 0
                       ? `${selectedFiles.length} file(s) • ${formatFileSize(totalSize)}`
-                      : 'Hotspot ready'}
+                      : 'Hotspot Ready'}
                   </div>
                 </div>
               </div>
 
-              {/* Centered QR Code */}
-              <div className="p-3.5 bg-white rounded-2xl shadow-xl my-1">
+              {/* Small QR Code */}
+              <div className="p-2.5 bg-white rounded-2xl shadow-lg my-1">
                 <QRCodeSVG
                   value={qrPayload}
-                  size={155}
+                  size={120}
                   level="M"
                   fgColor="#121316"
                   bgColor="#ffffff"
                 />
               </div>
 
-              <p className="text-[11px] text-slate-300 font-medium mt-2">
-                Scan with any receiving phone or desktop
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                Scan with any device camera or receiver
               </p>
-
-              {/* Footer controls: Collapse or Stop */}
-              <div className="w-full flex gap-2 mt-3 pt-2 border-t border-white/5">
-                <button
-                  onClick={() => setIsCollapsed(true)}
-                  className="flex-1 py-2.5 rounded-2xl neu-flat text-xs font-semibold text-slate-300 hover:text-white"
-                >
-                  Minimize
-                </button>
-                <button
-                  onClick={handleAttemptClose}
-                  className="flex-1 py-2.5 rounded-2xl neu-pressed text-xs font-bold text-rose-400 hover:text-rose-300"
-                >
-                  Cancel
-                </button>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>

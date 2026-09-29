@@ -28,9 +28,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     switch (os) {
       case 'android':
       case 'ios':
-        return <Smartphone size={11} className="text-[#2ee86f]" />;
+        return <Smartphone size={10} className="text-[#2ee86f]" />;
       default:
-        return <Monitor size={11} className="text-[#3b82f6]" />;
+        return <Monitor size={10} className="text-[#3b82f6]" />;
     }
   };
 
@@ -49,22 +49,19 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     setTimeout(() => {
       onConnectDevice(peer);
       onClose();
-    }, 600);
+    }, 500);
   };
 
-  // Compute non-overlapping scattered orbital positions based on peer count
   const count = peers.length;
-  // Size scales down responsively as count increases to prevent overlap
   const avatarSizeClass =
-    count <= 2 ? 'w-11 h-11' : count <= 4 ? 'w-9 h-9' : 'w-8 h-8';
+    count <= 2 ? 'w-9 h-9' : count <= 4 ? 'w-8 h-8' : 'w-7 h-7';
 
   const getScatterPosition = (index: number, total: number) => {
-    // Multi-ring staggered distribution ensuring zero collision
-    const baseRadius = total <= 3 ? 65 : 72;
-    const radiusVariation = index % 2 === 0 ? 0 : 16;
+    const baseRadius = total <= 3 ? 50 : 54;
+    const radiusVariation = index % 2 === 0 ? 0 : 12;
     const r = baseRadius + radiusVariation;
     const angleStep = (2 * Math.PI) / Math.max(total, 1);
-    const angle = index * angleStep - Math.PI / 2 + (index % 2 === 1 ? 0.3 : -0.2);
+    const angle = index * angleStep - Math.PI / 2 + (index % 2 === 1 ? 0.25 : -0.2);
     
     return {
       x: Math.round(Math.cos(angle) * r),
@@ -73,47 +70,34 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none flex flex-col justify-end">
-      {/* Dimmed backdrop */}
-      <AnimatePresence>
-        {!isCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleAttemptClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm pointer-events-auto"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Confirmation to Exit Scan */}
+    <div className="fixed bottom-20 left-0 right-0 z-50 pointer-events-none flex flex-col items-center px-4">
+      {/* Small Confirmation Popup */}
       <AnimatePresence>
         {showExitConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md pointer-events-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs pointer-events-auto">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-xs neu-raised rounded-3xl border border-white/10 p-5 bg-[#171821] text-center shadow-2xl"
+              className="w-full max-w-[260px] neu-raised rounded-3xl border border-white/10 p-4 bg-[#171821] text-center shadow-2xl"
             >
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-3">
-                <AlertCircle size={22} />
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-2">
+                <AlertCircle size={18} />
               </div>
-              <h3 className="text-sm font-bold text-white mb-1">Stop Scanning?</h3>
-              <p className="text-xs text-slate-400 mb-4">
-                You will stop searching for nearby devices.
+              <h3 className="text-xs font-bold text-white mb-1">Stop Scanning?</h3>
+              <p className="text-[11px] text-slate-400 mb-3">
+                Stop discovering nearby devices.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowExitConfirm(false)}
-                  className="flex-1 py-2.5 rounded-2xl neu-flat text-xs font-semibold text-slate-300 hover:text-white"
+                  className="flex-1 py-1.5 rounded-xl neu-flat text-[11px] font-semibold text-slate-300 hover:text-white"
                 >
                   Stay
                 </button>
                 <button
                   onClick={handleConfirmExit}
-                  className="flex-1 py-2.5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold shadow-md"
+                  className="flex-1 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold"
                 >
                   Stop
                 </button>
@@ -123,29 +107,27 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Main Bottom Sheet / Medium Radar Card */}
-      <div className="w-full max-w-md mx-auto pointer-events-auto px-3 pb-24 z-10">
+      {/* Small Compact Card - Slides & Fades from Down to Up */}
+      <div className="w-full max-w-[320px] pointer-events-auto">
         <AnimatePresence mode="wait">
           {isCollapsed ? (
-            /* COLLAPSED FLOATING PILL */
+            /* COLLAPSED PILL */
             <motion.div
               key="collapsed"
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 20, opacity: 0 }}
+              initial={{ opacity: 0, y: 25, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 28 }}
               onClick={() => setIsCollapsed(false)}
-              className="p-3 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_8px_30px_rgba(0,0,0,0.8)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
+              className="p-2.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_8px_30px_rgba(0,0,0,0.85)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
             >
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#2ee86f]/20 text-[#2ee86f] flex items-center justify-center">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#2ee86f] animate-ping" />
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#2ee86f]/20 text-[#2ee86f] flex items-center justify-center">
+                  <span className="w-2 h-2 rounded-full bg-[#2ee86f] animate-ping" />
                 </div>
                 <div className="text-left">
-                  <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <span>Scanning Network</span>
-                    <span className="text-[10px] text-[#2ee86f]">({peers.length} found)</span>
-                  </div>
-                  <div className="text-[10px] text-slate-400">Tap to expand radar</div>
+                  <div className="text-[11px] font-bold text-white">Radar Active</div>
+                  <div className="text-[10px] text-slate-400">({peers.length} found) • Tap to expand</div>
                 </div>
               </div>
 
@@ -155,75 +137,73 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                     e.stopPropagation();
                     setIsCollapsed(false);
                   }}
-                  className="p-1.5 rounded-xl neu-pressed text-slate-300 hover:text-white"
-                  title="Expand"
+                  className="p-1 rounded-lg neu-pressed text-slate-300 hover:text-white"
                 >
-                  <ChevronUp size={16} />
+                  <ChevronUp size={14} />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleAttemptClose();
                   }}
-                  className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-rose-400"
-                  title="Close"
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400"
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
             </motion.div>
           ) : (
-            /* EXPANDED RADAR CARD */
+            /* COMPACT SMALL CARD */
             <motion.div
               key="expanded"
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-              className="w-full neu-raised rounded-3xl border border-white/10 p-4 bg-[#16181f]/98 shadow-[0_12px_45px_rgba(0,0,0,0.9)] max-h-[76vh] flex flex-col items-center text-center overflow-y-auto"
+              initial={{ opacity: 0, y: 35, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 25, scale: 0.94 }}
+              transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+              className="w-full neu-raised rounded-3xl border border-white/10 p-3.5 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.85)] flex flex-col items-center text-center backdrop-blur-md"
             >
-              {/* Header Action Bar */}
-              <div className="w-full flex items-center justify-between pb-2 border-b border-white/5 mb-2">
+              {/* Header Bar */}
+              <div className="w-full flex items-center justify-between pb-1.5 border-b border-white/5 mb-1.5">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#2ee86f] animate-ping" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                    Radar Discovery
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f] animate-ping" />
+                  <span className="text-[11px] font-bold text-slate-300">
+                    Nearby Devices ({peers.length})
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => setIsCollapsed(true)}
-                    className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-white transition-colors"
-                    title="Collapse"
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white"
+                    title="Minimize"
                   >
-                    <ChevronDown size={17} />
+                    <ChevronDown size={14} />
                   </button>
                   <button
                     onClick={handleAttemptClose}
-                    className="p-1.5 rounded-xl neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                    title="Cancel & Exit"
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400"
+                    title="Close"
                   >
-                    <X size={17} />
+                    <X size={14} />
                   </button>
                 </div>
               </div>
 
-              {/* Scattered Non-Overlapping Radar Screen */}
-              <div className="relative w-56 h-56 flex items-center justify-center my-2">
+              {/* Compact Scattered Radar Screen */}
+              <div className="relative w-44 h-44 flex items-center justify-center my-1">
                 {/* Sonar pulses */}
                 <div className="absolute inset-0 rounded-full border border-[#2ee86f]/15 animate-radar pointer-events-none" />
-                <div className="absolute inset-6 rounded-full border border-[#2ee86f]/20 animate-radar-delayed pointer-events-none" />
-                <div className="absolute inset-14 rounded-full border border-[#2ee86f]/15 pointer-events-none" />
+                <div className="absolute inset-5 rounded-full border border-[#2ee86f]/20 animate-radar-delayed pointer-events-none" />
+                <div className="absolute inset-10 rounded-full border border-[#2ee86f]/15 pointer-events-none" />
 
                 {/* Center Self Device */}
-                <div className="relative z-10 w-14 h-14 rounded-full neu-raised border-2 border-[#2ee86f] flex flex-col items-center justify-center p-1 shadow-[0_0_20px_rgba(46,232,111,0.4)]">
+                <div className="relative z-10 w-11 h-11 rounded-full neu-raised border-2 border-[#2ee86f] flex flex-col items-center justify-center p-0.5 shadow-[0_0_15px_rgba(46,232,111,0.4)]">
                   <img
                     src={myProfile.avatar}
                     alt={myProfile.name}
-                    className="w-8 h-8 rounded-full object-cover mb-0.5"
+                    className="w-6 h-6 rounded-full object-cover"
                   />
-                  <span className="text-[8px] font-bold text-white max-w-[45px] truncate text-center leading-none">
+                  <span className="text-[7px] font-bold text-white max-w-[35px] truncate text-center leading-none">
                     You
                   </span>
                 </div>
@@ -238,7 +218,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                       key={peer.id}
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.1 + idx * 0.1 }}
+                      transition={{ delay: 0.1 + idx * 0.08 }}
                       whileHover={{ scale: 1.15 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => handleSelectDevice(peer)}
@@ -255,13 +235,13 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                             isConnecting
                               ? 'border-[#2ee86f] ring-2 ring-[#2ee86f] animate-pulse'
                               : 'border-white/20 group-hover:border-[#2ee86f]'
-                          } shadow-lg transition-all`}
+                          } shadow-md transition-all`}
                         />
-                        <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-[#121316]">
+                        <div className="absolute -bottom-0.5 -right-0.5 p-0.5 rounded-full bg-[#121316]">
                           {getOsIcon(peer.os)}
                         </div>
                       </div>
-                      <span className="text-[9px] font-semibold text-slate-200 mt-0.5 max-w-[65px] truncate px-1 rounded bg-[#121316]/90 border border-white/10 group-hover:text-[#2ee86f] transition-colors">
+                      <span className="text-[8px] font-semibold text-slate-200 mt-0.5 max-w-[55px] truncate px-1 rounded bg-[#121316]/90 border border-white/10 group-hover:text-[#2ee86f] transition-colors">
                         {peer.name.split(' ')[0]}
                       </span>
                     </motion.button>
@@ -269,57 +249,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 })}
               </div>
 
-              <p className="text-[11px] text-slate-400 font-medium mb-2">
-                Tap any nearby device above to connect
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Tap any device above to connect & receive
               </p>
-
-              {/* Minimalist Device List */}
-              <div className="w-full space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                {peers.map((peer) => {
-                  const isConnecting = connectingPeerId === peer.id;
-                  return (
-                    <button
-                      key={peer.id}
-                      onClick={() => handleSelectDevice(peer)}
-                      className={`w-full p-2 rounded-2xl flex items-center justify-between transition-all ${
-                        isConnecting
-                          ? 'bg-[#183020] border border-[#2ee86f]'
-                          : 'neu-raised border border-white/5 hover:border-[#2ee86f]/40'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={peer.avatar}
-                          alt={peer.name}
-                          className="w-7 h-7 rounded-xl object-cover"
-                        />
-                        <div className="text-left">
-                          <div className="text-xs font-bold text-white">{peer.name}</div>
-                        </div>
-                      </div>
-                      <span className="text-[11px] font-bold text-[#2ee86f] px-2 py-0.5 rounded-xl neu-pressed">
-                        {isConnecting ? 'Connecting...' : 'Connect'}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Footer controls: Collapse or Stop */}
-              <div className="w-full flex gap-2 mt-3 pt-2 border-t border-white/5">
-                <button
-                  onClick={() => setIsCollapsed(true)}
-                  className="flex-1 py-2 rounded-2xl neu-flat text-xs font-semibold text-slate-300 hover:text-white"
-                >
-                  Minimize
-                </button>
-                <button
-                  onClick={handleAttemptClose}
-                  className="flex-1 py-2 rounded-2xl neu-pressed text-xs font-bold text-rose-400 hover:text-rose-300"
-                >
-                  Stop Scanning
-                </button>
-              </div>
             </motion.div>
           )}
         </AnimatePresence>
