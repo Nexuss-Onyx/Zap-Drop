@@ -12,6 +12,8 @@ import {
   AVATAR_PRESETS,
 } from './services/mockNetwork';
 import { INITIAL_FILES, PlatformBridge } from './services/platformBridge';
+import { getDeviceProfile } from './services/device';
+import { watchNetwork } from './services/network';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { DeviceExplorer } from './components/DeviceExplorer';
@@ -20,6 +22,9 @@ import { ProfileSettings } from './components/ProfileSettings';
 import { SendModal } from './components/SendModal';
 import { ReceiveModal } from './components/ReceiveModal';
 import { TransferProgressModal } from './components/TransferProgressModal';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 export default function App() {
   const detectedOs = PlatformBridge.getDetectedOS();
@@ -54,6 +59,51 @@ export default function App() {
       status: 'online',
     };
   });
+
+  // Load real device info on launch
+  useEffect(() => {
+    getDeviceProfile().then((p) => {
+      if (p) {
+        setMyProfile((prev) => ({
+          ...prev,
+          id: p.id,
+          name: p.name || prev.name,
+          avatar: p.avatar || prev.avatar,
+        }));
+      }
+    });
+
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#0d0e12' }).catch(() => {});
+
+      // Capacitor Back Button handling
+      const backSub = CapApp.addListener('backButton', ({ canGoBack }) => {
+        if (isSendModalOpen) {
+          setIsSendModalOpen(false);
+        } else if (isReceiveModalOpen) {
+          setIsReceiveModalOpen(false);
+        } else if (isActionMenuOpen) {
+          setIsActionMenuOpen(false);
+        } else if (activeTab !== 'files') {
+          setActiveTab('files');
+        } else if (canGoBack) {
+          window.history.back();
+        } else {
+          CapApp.exitApp();
+        }
+      });
+
+      const netSub = watchNetwork((online) => {
+        setMyProfile((prev) => ({ ...prev, status: online ? 'online' : 'busy' }));
+      });
+
+      return () => {
+        backSub.then((s) => s.remove());
+        netSub.then((s) => s.remove());
+      };
+    }
+  }, []);
 
   // Hotspot state
   const [hotspotState, setHotspotState] = useState<HotspotState>(() => ({
@@ -147,144 +197,112 @@ export default function App() {
     setSelectedFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  // SEND CLICK: Automatically turn on hotspot and open clean centered QR code
-  const handleOpenSend = () => {
-    setHotspotState((prev) => ({ ...prev, enabled: true }));
+  // Open send with files selected
+  const handleOpenSendWithFiles = (selected: DeviceFile[]) => {
+    setSelectedFiles(selected);
     setIsReceiveModalOpen(false);
-    setIsSendCollapsed(false);
     setIsSendModalOpen(true);
+    setIsSendCollapsed(false);
+    setIsActionMenuOpen(false);
   };
 
-  // RECEIVE CLICK: Turn on WiFi / scan nearby devices
+  // Open send from action button
+  const handleOpenSend = () => {
+    if (selectedFiles.length === 0 && files.length > 0) {
+      setSelectedFiles([files[0]]);
+    }
+    setIsReceiveModalOpen(false);
+    setIsSendModalOpen(true);
+    setIsSendCollapsed(false);
+    setIsActionMenuOpen(false);
+  };
+
+  // Open receive from action button
   const handleOpenReceive = () => {
     setIsSendModalOpen(false);
-    setIsReceiveCollapsed(false);
     setIsReceiveModalOpen(true);
+    setIsReceiveCollapsed(false);
+    setIsActionMenuOpen(false);
   };
 
-  // Connect to a device clicked in the scan to start receiving/transferring
-  const handleConnectDevice = (targetPeer: DeviceProfile) => {
-    const mockFile: DeviceFile = {
-      id: 'rx-' + Date.now(),
-      name: 'Shared_Archive.zip',
-      path: '/storage/emulated/0/Downloads/Shared_Archive.zip',
-      size: 42000000,
-      modifiedDate: 'Today',
-      category: 'archives',
-      mimeType: 'application/zip',
-      isDirectory: false,
-      extension: 'zip',
-    };
+  // Connect to peer in receive radar
+  const handleConnectDevice = (peer: DeviceProfile) => {
+    if (selectedFiles.length === 0 && files.length > 0) {
+      setSelectedFiles([files[0]]);
+    }
+    const targetFile = selectedFiles[0] || files[0];
+    if (!targetFile) return;
 
-    const newTransfer: TransferRecord = {
-      id: 'rx-' + Date.now(),
-      fileName: mockFile.name,
-      fileSize: mockFile.size,
-      fileType: mockFile.mimeType,
-      category: mockFile.category,
-      senderId: targetPeer.id,
-      senderName: targetPeer.name,
-      senderAvatar: targetPeer.avatar,
-      senderOs: targetPeer.os,
-      receiverId: myProfile.id,
-      receiverName: myProfile.name,
-      receiverAvatar: myProfile.avatar,
-      receiverOs: myProfile.os,
-      direction: 'received',
-      timestamp: Date.now(),
-      dateLabel: 'Today, Just now',
-      status: 'transferring',
-      progress: 0,
-      speedMbps: 58.4,
-    };
-
-    setCurrentTransfer(newTransfer);
-    simulateTransferProgress(newTransfer);
-  };
-
-  const handleStartTransferWithFiles = (targetPeer: DeviceProfile, filesToSend: DeviceFile[]) => {
-    const mainFile = filesToSend[0] || files[0];
-    const totalSize = filesToSend.reduce((sum, f) => sum + f.size, 0);
-
-    const newTransfer: TransferRecord = {
-      id: 'tx-' + Date.now(),
-      fileName: filesToSend.length === 1 ? mainFile.name : `${mainFile.name} + ${filesToSend.length - 1} files`,
-      fileSize: totalSize,
-      fileType: mainFile.mimeType,
-      category: mainFile.category,
+    const newRecord: TransferRecord = {
+      id: 'tr-' + Date.now(),
+      fileName: targetFile.name,
+      fileSize: targetFile.size,
+      fileType: targetFile.mimeType,
+      category: targetFile.category,
       senderId: myProfile.id,
       senderName: myProfile.name,
       senderAvatar: myProfile.avatar,
       senderOs: myProfile.os,
-      receiverId: targetPeer.id,
-      receiverName: targetPeer.name,
-      receiverAvatar: targetPeer.avatar,
-      receiverOs: targetPeer.os,
+      receiverId: peer.id,
+      receiverName: peer.name,
+      receiverAvatar: peer.avatar,
+      receiverOs: peer.os,
       direction: 'sent',
       timestamp: Date.now(),
-      dateLabel: 'Today, Just now',
+      dateLabel: 'Just now',
       status: 'transferring',
       progress: 0,
-      speedMbps: 54.0,
+      speedMbps: 45.5,
     };
 
-    setCurrentTransfer(newTransfer);
-    simulateTransferProgress(newTransfer);
-  };
+    setCurrentTransfer(newRecord);
+    setTransfers((prev) => [newRecord, ...prev]);
 
-  const simulateTransferProgress = (initialRecord: TransferRecord) => {
-    if (transferIntervalRef.current) {
-      clearInterval(transferIntervalRef.current);
-    }
-
-    let currentProgress = 0;
+    // Simulated transfer progress for peer direct click
+    let p = 0;
+    if (transferIntervalRef.current) clearInterval(transferIntervalRef.current);
     transferIntervalRef.current = setInterval(() => {
-      currentProgress += 14 + Math.random() * 8;
-      if (currentProgress >= 100) {
-        currentProgress = 100;
+      p += 15;
+      if (p >= 100) {
         if (transferIntervalRef.current) clearInterval(transferIntervalRef.current);
-
-        const completedRecord: TransferRecord = {
-          ...initialRecord,
-          progress: 100,
-          status: 'completed',
-        };
-
-        setCurrentTransfer(completedRecord);
-        setTransfers((prev) => [completedRecord, ...prev]);
+        setCurrentTransfer((prev) => (prev ? { ...prev, progress: 100, status: 'completed' } : null));
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === newRecord.id ? { ...t, progress: 100, status: 'completed' } : t))
+        );
       } else {
-        setCurrentTransfer((prev) =>
-          prev
-            ? {
-                ...prev,
-                progress: currentProgress,
-              }
-            : null
+        setCurrentTransfer((prev) => (prev ? { ...prev, progress: p } : null));
+        setTransfers((prev) =>
+          prev.map((t) => (t.id === newRecord.id ? { ...t, progress: p } : t))
         );
       }
-    }, 280);
+    }, 400);
   };
 
-  const handleCancelTransfer = () => {
-    if (transferIntervalRef.current) {
-      clearInterval(transferIntervalRef.current);
-    }
+  const handleCloseTransferModal = () => {
+    if (transferIntervalRef.current) clearInterval(transferIntervalRef.current);
     setCurrentTransfer(null);
   };
 
-  const handleDownloadCompleted = (record: TransferRecord) => {
-    const blob = new Blob([`Zapdrop transfer data for ${record.fileName}`], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = record.fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleUpdateProfile = (updated: Partial<DeviceProfile>) => {
+    setMyProfile((prev) => ({ ...prev, ...updated }));
+  };
+
+  const handleUpdateHotspot = (updated: Partial<HotspotState>) => {
+    setHotspotState((prev) => ({ ...prev, ...updated }));
+  };
+
+  const handleClearHistory = () => {
+    setTransfers([]);
+  };
+
+  const handleDeleteTransfer = (id: string) => {
+    setTransfers((prev) => prev.filter((t) => t.id !== id));
   };
 
   return (
-    <div className="min-h-screen bg-[#121316] text-[#e2e8f0] flex flex-col selection:bg-[#22c55e] selection:text-black">
-      {/* Clean Minimalist Header */}
+    <div className="min-h-screen bg-[#0d0e12] text-slate-100 flex flex-col font-sans selection:bg-[#22c55e]/30 selection:text-white">
+      
+      {/* Top Header */}
       <Header
         myProfile={myProfile}
         hotspotState={hotspotState}
@@ -292,8 +310,8 @@ export default function App() {
         isDesktopView={isDesktopView}
       />
 
-      {/* Main Screen Content (Folders/Files Explorer is the default view above navigation) */}
-      <main className="flex-1 w-full relative">
+      {/* Main View Area */}
+      <main className="flex-1 overflow-y-auto">
         {activeTab === 'files' && (
           <DeviceExplorer
             files={files}
@@ -301,10 +319,7 @@ export default function App() {
             onToggleSelectFile={handleToggleSelectFile}
             onSelectAll={handleSelectAll}
             onClearSelection={handleClearSelection}
-            onOpenSendWithFiles={(filesToSend) => {
-              setSelectedFiles(filesToSend);
-              handleOpenSend();
-            }}
+            onOpenSendWithFiles={handleOpenSendWithFiles}
             onAddNewFiles={handleAddNewFiles}
             onDeleteFile={handleDeleteFile}
           />
@@ -313,22 +328,11 @@ export default function App() {
         {activeTab === 'history' && (
           <TransferHistory
             transfers={transfers}
-            onClearHistory={() => setTransfers([])}
-            onDeleteTransfer={(id) => setTransfers((prev) => prev.filter((t) => t.id !== id))}
+            onClearHistory={handleClearHistory}
+            onDeleteTransfer={handleDeleteTransfer}
             onResend={(record) => {
-              const matchedPeer = peers[0];
-              const mockFile: DeviceFile = {
-                id: 'resend-' + Date.now(),
-                name: record.fileName,
-                path: `/storage/emulated/0/${record.fileName}`,
-                size: record.fileSize,
-                modifiedDate: 'Today',
-                category: record.category,
-                mimeType: record.fileType,
-                isDirectory: false,
-                extension: record.fileName.split('.').pop() || 'bin',
-              };
-              handleStartTransferWithFiles(matchedPeer, [mockFile]);
+              const matched = files.find((f) => f.name === record.fileName);
+              if (matched) handleOpenSendWithFiles([matched]);
             }}
           />
         )}
@@ -336,14 +340,46 @@ export default function App() {
         {activeTab === 'profile' && (
           <ProfileSettings
             myProfile={myProfile}
-            onUpdateProfile={(updated) => setMyProfile((prev) => ({ ...prev, ...updated }))}
+            onUpdateProfile={handleUpdateProfile}
             hotspotState={hotspotState}
-            onUpdateHotspot={(updated) => setHotspotState((prev) => ({ ...prev, ...updated }))}
+            onUpdateHotspot={handleUpdateHotspot}
           />
         )}
       </main>
 
-      {/* 3-Icon Curved Bottom Navigation Bar (History, Share, Profile) */}
+      {/* Send Modal Sheet */}
+      <SendModal
+        isOpen={isSendModalOpen}
+        onClose={() => setIsSendModalOpen(false)}
+        selectedFiles={selectedFiles}
+        hotspotState={hotspotState}
+        myProfile={myProfile}
+        isCollapsed={isSendCollapsed}
+        setIsCollapsed={setIsSendCollapsed}
+      />
+
+      {/* Receive Modal Sheet */}
+      <ReceiveModal
+        isOpen={isReceiveModalOpen}
+        onClose={() => setIsReceiveModalOpen(false)}
+        myProfile={myProfile}
+        peers={peers}
+        onConnectDevice={handleConnectDevice}
+        isCollapsed={isReceiveCollapsed}
+        setIsCollapsed={setIsReceiveCollapsed}
+      />
+
+      {/* Active Transfer Progress Modal */}
+      {currentTransfer && (
+        <TransferProgressModal
+          currentTransfer={currentTransfer}
+          onCancel={handleCloseTransferModal}
+          onDismiss={handleCloseTransferModal}
+          onDownloadCompleted={() => {}}
+        />
+      )}
+
+      {/* Bottom Floating Navigation (History, Share with revealed Send/Receive circles, Profile) */}
       <BottomNav
         activeTab={activeTab}
         onSelectTab={(tab) => {
@@ -360,41 +396,6 @@ export default function App() {
         onToggleCardCollapse={handleToggleCardCollapse}
       />
 
-      {/* Clean Centered Send QR Code Modal */}
-      <SendModal
-        isOpen={isSendModalOpen}
-        onClose={() => {
-          setIsSendModalOpen(false);
-          setIsSendCollapsed(false);
-        }}
-        selectedFiles={selectedFiles.length > 0 ? selectedFiles : files.slice(0, 1)}
-        hotspotState={hotspotState}
-        myProfile={myProfile}
-        isCollapsed={isSendCollapsed}
-        setIsCollapsed={setIsSendCollapsed}
-      />
-
-      {/* Radar Scan Receive Modal */}
-      <ReceiveModal
-        isOpen={isReceiveModalOpen}
-        onClose={() => {
-          setIsReceiveModalOpen(false);
-          setIsReceiveCollapsed(false);
-        }}
-        myProfile={myProfile}
-        peers={peers}
-        onConnectDevice={handleConnectDevice}
-        isCollapsed={isReceiveCollapsed}
-        setIsCollapsed={setIsReceiveCollapsed}
-      />
-
-      {/* Transfer Progress & Completion Modal */}
-      <TransferProgressModal
-        currentTransfer={currentTransfer}
-        onCancel={handleCancelTransfer}
-        onDismiss={() => setCurrentTransfer(null)}
-        onDownloadCompleted={handleDownloadCompleted}
-      />
     </div>
   );
 }

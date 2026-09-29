@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { QRCodeSVG } from 'qrcode.react';
-import { X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Wifi } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/mockNetwork';
+import { startSend, SendSession } from '../services/send';
 
 interface SendModalProps {
   isOpen: boolean;
@@ -25,17 +25,81 @@ export const SendModal: React.FC<SendModalProps> = ({
   setIsCollapsed,
 }) => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+  const [serverIp, setServerIp] = useState<string | null>(null);
+  const [serverPort, setServerPort] = useState<number | null>(null);
+  const [transferProgress, setTransferProgress] = useState<{ bytes: number; total: number } | null>(null);
+  const [transferDone, setTransferDone] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const sessionRef = useRef<SendSession | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || selectedFiles.length === 0) {
+      if (sessionRef.current) {
+        sessionRef.current.stop();
+        sessionRef.current = null;
+      }
+      setQrCodeDataUrl(null);
+      setTransferProgress(null);
+      setTransferDone(false);
+      setErrorMsg(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    startSend(
+      selectedFiles,
+      (id, bytes, total) => {
+        if (isMounted) {
+          setTransferProgress({ bytes, total });
+        }
+      },
+      () => {
+        if (isMounted) {
+          setTransferDone(true);
+        }
+      }
+    )
+      .then((session) => {
+        if (!isMounted) {
+          session.stop();
+          return;
+        }
+        sessionRef.current = session;
+        setQrCodeDataUrl(session.qrCodeUrl);
+        setServerIp(session.ip);
+        setServerPort(session.port);
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setErrorMsg(err.message || 'Failed to start file sharing server');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (sessionRef.current) {
+        sessionRef.current.stop();
+        sessionRef.current = null;
+      }
+    };
+  }, [isOpen, selectedFiles]);
 
   if (!isOpen) return null;
 
   const totalSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
-  const qrPayload = `WIFI:T:WPA;S:${hotspotState.ssid};P:${hotspotState.password};;`;
 
   const handleAttemptClose = () => {
     setShowExitConfirm(true);
   };
 
   const handleConfirmExit = () => {
+    if (sessionRef.current) {
+      sessionRef.current.stop();
+      sessionRef.current = null;
+    }
     setShowExitConfirm(false);
     setIsCollapsed(false);
     onClose();
@@ -58,18 +122,18 @@ export const SendModal: React.FC<SendModalProps> = ({
               </div>
               <h3 className="text-xs font-bold text-white mb-1">Stop Sharing?</h3>
               <p className="text-[11px] text-slate-400 mb-3">
-                Other devices will stop receiving.
+                Closing will terminate the direct local transfer session.
               </p>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowExitConfirm(false)}
-                  className="flex-1 py-1.5 rounded-xl neu-flat text-[11px] font-semibold text-slate-300 hover:text-white"
+                  className="flex-1 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-white transition-all cursor-pointer"
                 >
                   Stay
                 </button>
                 <button
                   onClick={handleConfirmExit}
-                  className="flex-1 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold"
+                  className="flex-1 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-xs font-bold text-white shadow-lg transition-all cursor-pointer"
                 >
                   Exit
                 </button>
@@ -79,116 +143,109 @@ export const SendModal: React.FC<SendModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Positioned directly above the nav bar, elevated just enough behind the Share button (z-30) */}
-      <div className="fixed bottom-[76px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Main Send Floating Sheet */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 flex flex-col items-center pointer-events-none px-4">
         <motion.div
-          layout
-          initial={{ opacity: 0, y: 35, scale: 0.92 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 35, scale: 0.92 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-          className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
+          initial={{ y: 80, opacity: 0, scale: 0.95 }}
+          animate={{
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            height: isCollapsed ? '52px' : 'auto',
+          }}
+          exit={{ y: 80, opacity: 0, scale: 0.95 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+          className="w-full max-w-[340px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#161720]/95 backdrop-blur-md shadow-[0_15px_40px_rgba(0,0,0,0.85)] overflow-hidden"
         >
-          {isCollapsed ? (
-            /* COLLAPSED BUTTON VIEW - SITS JUST A BIT HIGHER, PERFECTLY VISIBLE */
-            <motion.div
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setIsCollapsed(false)}
-              className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
-            >
-              {/* Left Wing */}
-              <div className="flex items-center gap-1.5">
-                <div className="p-1 rounded-lg neu-pressed text-[#2ee86f]">
-                  <ChevronUp size={13} />
-                </div>
-                <span className="text-[11px] font-bold text-white group-hover:text-[#2ee86f] transition-colors">
-                  QR Code
-                </span>
-              </div>
+          {/* Header Row */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#2ee86f] animate-pulse" />
+              <span className="text-xs font-bold text-white">
+                {transferDone ? 'Transfer Complete' : `Sending ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`}
+              </span>
+              <span className="text-[10px] text-slate-400">
+                ({formatFileSize(totalSize)})
+              </span>
+            </div>
 
-              {/* Center Spacer for Share Button */}
-              <div className="w-12 h-4" />
-
-              {/* Right Wing */}
+            <div className="flex items-center gap-1">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAttemptClose();
-                }}
-                className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                title="Exit"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title={isCollapsed ? 'Expand' : 'Minimize'}
               >
-                <X size={13} />
+                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
-            </motion.div>
-          ) : (
-            /* EXPANDED FULL CARD VIEW - RISES UP FROM BEHIND THE SHARE BUTTON */
-            <motion.div
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className="p-3 pb-3.5 flex flex-col items-center text-center"
-            >
-              {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
-              <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setIsCollapsed(true)}
-                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    title="Collapse down"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
-                  <span className="text-[10px] font-bold text-slate-300">
-                    Scan to Receive
-                  </span>
-                </div>
 
-                <button
-                  onClick={handleAttemptClose}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X size={13} />
-                </button>
+              <button
+                onClick={handleAttemptClose}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Content */}
+          {!isCollapsed && (
+            <div className="p-4 flex flex-col items-center text-center space-y-3">
+              {/* QR Code Container */}
+              <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center min-w-[170px] min-h-[170px]">
+                {qrCodeDataUrl ? (
+                  <img
+                    src={qrCodeDataUrl}
+                    alt="Scan to Receive"
+                    className="w-36 h-36 object-contain"
+                  />
+                ) : errorMsg ? (
+                  <div className="text-xs text-red-500 p-2">{errorMsg}</div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-slate-600">
+                    <Wifi size={24} className="animate-pulse" />
+                    <span className="text-[10px]">Starting Server...</span>
+                  </div>
+                )}
               </div>
 
-              {/* Profile & Files line */}
-              <div className="flex items-center gap-2 mb-1.5">
-                <img
-                  src={myProfile.avatar}
-                  alt={myProfile.name}
-                  className="w-7 h-7 rounded-xl object-cover ring-1 ring-[#2ee86f]"
-                />
-                <div className="text-left">
-                  <div className="text-[11px] font-bold text-white leading-tight">{myProfile.name}</div>
-                  <div className="text-[9px] text-[#2ee86f] font-mono">
-                    {selectedFiles.length > 0
-                      ? `${selectedFiles.length} file(s) • ${formatFileSize(totalSize)}`
-                      : 'Hotspot Ready'}
+              {/* Transfer Progress Bar */}
+              {transferProgress && transferProgress.total > 0 && (
+                <div className="w-full space-y-1">
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>Transferring...</span>
+                    <span>{Math.round((transferProgress.bytes / transferProgress.total) * 100)}%</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#22c55e] to-[#39f07c] transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.round((transferProgress.bytes / transferProgress.total) * 100))}%`,
+                      }}
+                    />
                   </div>
                 </div>
+              )}
+
+              {/* Direct Wi-Fi Connection Details */}
+              <div className="w-full p-2.5 rounded-2xl bg-black/30 border border-white/5 space-y-1 text-left">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">Host IP:</span>
+                  <span className="text-[11px] font-mono font-bold text-emerald-400">
+                    {serverIp ? `${serverIp}:${serverPort}` : '192.168.43.1'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400">P2P Network:</span>
+                  <span className="text-[11px] font-medium text-white">{hotspotState.ssid}</span>
+                </div>
               </div>
 
-              {/* Small Clean QR Code */}
-              <div className="p-2 bg-white rounded-2xl shadow-lg my-0.5">
-                <QRCodeSVG
-                  value={qrPayload}
-                  size={115}
-                  level="M"
-                  fgColor="#121316"
-                  bgColor="#ffffff"
-                />
+              <div className="flex items-center gap-1 text-[10px] text-slate-400">
+                <ShieldCheck size={12} className="text-[#2ee86f]" />
+                <span>Encrypted offline direct peer-to-peer transfer</span>
               </div>
-
-              <p className="text-[9px] text-slate-400 mt-1">
-                Scan with receiver device camera
-              </p>
-            </motion.div>
+            </div>
           )}
         </motion.div>
       </div>

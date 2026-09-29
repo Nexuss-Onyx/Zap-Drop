@@ -1,0 +1,20 @@
+{
+  "appId": "com.zapdrop.app",
+  "appName": "Zapdrop",
+  "webDir": "dist",
+  "android": {
+    "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_zapdrop"
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { User, Camera, Check, Radio } from 'lucide-react';
 import { DeviceProfile, HotspotState } from '../types';
 import { AVATAR_PRESETS } from '../services/mockNetwork';
+import { setDeviceName, setAvatar } from '../services/device';
 
 interface ProfileSettingsProps {
   myProfile: DeviceProfile;
@@ -22,19 +23,25 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [hotspotSsid, setHotspotSsid] = useState(hotspotState.ssid);
   const [hotspotPass, setHotspotPass] = useState(hotspotState.password);
 
-  const handleSaveProfile = () => {
-    onUpdateProfile({
-      name: nameInput.trim() || myProfile.name,
-    });
+  const handleSaveProfile = async () => {
+    const trimmed = nameInput.trim() || myProfile.name;
+    await setDeviceName(trimmed);
+    onUpdateProfile({ name: trimmed });
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
 
-  const handleCustomAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCustomAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const url = URL.createObjectURL(e.target.files[0]);
+      await setAvatar(url);
       onUpdateProfile({ avatar: url });
     }
+  };
+
+  const handleSelectPresetAvatar = async (avatarUrl: string) => {
+    await setAvatar(avatarUrl);
+    onUpdateProfile({ avatar: avatarUrl });
   };
 
   return (
@@ -58,9 +65,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <label
               htmlFor="avatar-upload"
               className="absolute -bottom-1 -right-1 p-1.5 rounded-xl bg-[#22c55e] text-black cursor-pointer shadow-lg hover:scale-105 transition-transform"
-              title="Upload Custom Photo"
+              title="Change Avatar"
             >
-              <Camera size={15} className="stroke-[2.5]" />
+              <Camera size={14} />
               <input
                 id="avatar-upload"
                 type="file"
@@ -71,85 +78,107 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             </label>
           </div>
 
-          {/* Name input */}
-          <div className="flex-1 w-full space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 block">
-              Device Name
-            </label>
-            <div className="flex gap-2">
+          <div className="flex-1 w-full space-y-3">
+            <div>
+              <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                Display Name (Visible to nearby peers)
+              </label>
               <input
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
-                className="flex-1 px-4 py-2.5 rounded-2xl neu-pressed text-sm text-white font-bold border border-white/5 focus:border-[#22c55e]/50 outline-none"
-                placeholder="Device Name"
+                placeholder="e.g. Studio MacBook Pro"
+                className="w-full px-3.5 py-2.5 rounded-2xl neu-pressed text-xs text-white placeholder-slate-500 border border-white/5 focus:border-[#22c55e]/40 outline-none"
               />
-              <button
-                onClick={handleSaveProfile}
-                className="px-4 py-2.5 rounded-2xl bg-[#22c55e] text-black font-bold text-xs shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:bg-[#16a34a] transition-all flex items-center gap-1"
-              >
-                {isSaved ? <Check size={16} /> : 'Save'}
-                <span>{isSaved ? 'Saved' : 'Update'}</span>
-              </button>
             </div>
+
+            <button
+              onClick={handleSaveProfile}
+              className="w-full py-2.5 rounded-2xl bg-[#22c55e] text-black text-xs font-bold hover:bg-[#16a34a] shadow-[0_0_15px_rgba(34,197,94,0.3)] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              {isSaved ? (
+                <>
+                  <Check size={14} className="stroke-[3]" />
+                  <span>Saved!</span>
+                </>
+              ) : (
+                <span>Save Profile</span>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Preset Avatar Selection */}
+        {/* Preset Avatars */}
         <div>
-          <label className="text-xs font-semibold text-slate-400 mb-2 block">Default Avatars</label>
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-            {AVATAR_PRESETS.map((avUrl, idx) => (
+          <label className="block text-[11px] font-medium text-slate-400 mb-2">
+            Or Choose an Avatar Preset
+          </label>
+          <div className="flex items-center gap-3 overflow-x-auto pb-1">
+            {AVATAR_PRESETS.map((preset, idx) => (
               <button
                 key={idx}
-                onClick={() => onUpdateProfile({ avatar: avUrl })}
-                className={`w-11 h-11 rounded-2xl overflow-hidden shrink-0 transition-all ${
-                  myProfile.avatar === avUrl
-                    ? 'ring-2 ring-[#22c55e] scale-105 shadow-[0_0_15px_rgba(34,197,94,0.5)]'
-                    : 'neu-pressed opacity-70 hover:opacity-100'
+                onClick={() => handleSelectPresetAvatar(preset)}
+                className={`w-11 h-11 rounded-2xl overflow-hidden shrink-0 transition-transform ${
+                  myProfile.avatar === preset
+                    ? 'ring-2 ring-[#22c55e] scale-105'
+                    : 'opacity-60 hover:opacity-100 hover:scale-105'
                 }`}
               >
-                <img src={avUrl} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
+                <img src={preset} alt={`Preset ${idx + 1}`} className="w-full h-full object-cover" />
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Hotspot Settings */}
+      {/* Direct Wi-Fi Hotspot Settings */}
       <div className="p-5 sm:p-6 rounded-3xl neu-raised border border-white/5 space-y-4">
-        <div className="flex items-center gap-2 pb-3 border-b border-white/5">
-          <Radio size={18} className="text-[#22c55e]" />
-          <h2 className="text-sm font-bold text-white">Hotspot Settings</h2>
+        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Radio size={18} className="text-[#22c55e]" />
+            <h2 className="text-sm font-bold text-white">Direct P2P Hotspot</h2>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+            No Internet Needed
+          </span>
         </div>
 
-        <div className="space-y-3">
+        <p className="text-xs text-slate-400 leading-relaxed">
+          Zapdrop automatically establishes an offline high-speed local connection for lightning fast transfers.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1 block">Network Name</label>
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
+              Hotspot SSID
+            </label>
             <input
               type="text"
               value={hotspotSsid}
-              onChange={(e) => {
-                setHotspotSsid(e.target.value);
-                onUpdateHotspot({ ssid: e.target.value });
-              }}
-              className="w-full px-4 py-2 rounded-xl neu-pressed text-xs text-white font-medium border border-white/5 outline-none"
+              onChange={(e) => setHotspotSsid(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-2xl neu-pressed text-xs text-white placeholder-slate-500 border border-white/5 outline-none"
             />
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-400 mb-1 block">Password</label>
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
+              WPA2 Password
+            </label>
             <input
               type="text"
               value={hotspotPass}
-              onChange={(e) => {
-                setHotspotPass(e.target.value);
-                onUpdateHotspot({ password: e.target.value });
-              }}
-              className="w-full px-4 py-2 rounded-xl neu-pressed text-xs text-[#22c55e] font-mono font-medium border border-white/5 outline-none"
+              onChange={(e) => setHotspotPass(e.target.value)}
+              className="w-full px-3.5 py-2 rounded-2xl neu-pressed text-xs text-white placeholder-slate-500 border border-white/5 outline-none"
             />
           </div>
         </div>
+
+        <button
+          onClick={() => onUpdateHotspot({ ssid: hotspotSsid, password: hotspotPass })}
+          className="px-4 py-2 rounded-xl neu-raised text-xs font-semibold text-white hover:text-[#22c55e] transition-all cursor-pointer"
+        >
+          Update Hotspot Config
+        </button>
       </div>
 
     </div>

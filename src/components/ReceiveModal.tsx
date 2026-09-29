@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor, QrCode, Wifi } from 'lucide-react';
 import { DeviceProfile, OSPlatform } from '../types';
+import { startReceive, ReceiveProgressInfo } from '../services/receive';
+import { startRadarDiscovery } from '../services/radar';
 
 interface ReceiveModalProps {
   isOpen: boolean;
@@ -17,13 +19,52 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
   isOpen,
   onClose,
   myProfile,
-  peers,
   onConnectDevice,
   isCollapsed,
   setIsCollapsed,
 }) => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [connectingPeerId, setConnectingPeerId] = useState<string | null>(null);
+  const [radarDevices, setRadarDevices] = useState<DeviceProfile[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [progressInfo, setProgressInfo] = useState<ReceiveProgressInfo | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setRadarDevices([]);
+      setProgressInfo(null);
+      setStatusMessage(null);
+      setIsScanning(false);
+      return;
+    }
+
+    let isMounted = true;
+    let stopDiscovery: (() => Promise<void>) | null = null;
+
+    startRadarDiscovery(
+      (device) => {
+        if (isMounted) {
+          setRadarDevices((prev) => {
+            if (prev.some((d) => d.id === device.id)) return prev;
+            return [...prev, device];
+          });
+        }
+      },
+      (lostId) => {
+        if (isMounted) {
+          setRadarDevices((prev) => prev.filter((d) => d.id !== lostId));
+        }
+      }
+    ).then((session) => {
+      stopDiscovery = session.stop;
+    });
+
+    return () => {
+      isMounted = false;
+      if (stopDiscovery) stopDiscovery();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -47,6 +88,24 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     onClose();
   };
 
+  const handleStartQrScan = async () => {
+    setIsScanning(true);
+    setStatusMessage('Scanning QR code...');
+    try {
+      await startReceive((info) => {
+        setProgressInfo(info);
+      });
+      setStatusMessage('All files received successfully!');
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (e: unknown) {
+      setStatusMessage((e as Error)?.message || 'Scan cancelled or failed');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
   const handleSelectDevice = (peer: DeviceProfile) => {
     setConnectingPeerId(peer.id);
     setTimeout(() => {
@@ -55,17 +114,16 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     }, 500);
   };
 
-  // 4 well-scattered quadrant positions around center
   const quadrantOffsets = [
-    { x: -55, y: -46 }, // Top-Left
-    { x: 55, y: -46 },  // Top-Right
-    { x: -52, y: 44 },  // Bottom-Left
-    { x: 52, y: 44 },   // Bottom-Right
+    { x: -55, y: -46 },
+    { x: 55, y: -46 },
+    { x: -55, y: 46 },
+    { x: 55, y: 46 },
   ];
 
   return (
     <>
-      {/* Small Confirmation Popup */}
+      {/* Small Confirmation Modal */}
       <AnimatePresence>
         {showExitConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs pointer-events-auto">
@@ -78,22 +136,22 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-2">
                 <AlertCircle size={18} />
               </div>
-              <h3 className="text-xs font-bold text-white mb-1">Stop Scanning?</h3>
+              <h3 className="text-xs font-bold text-white mb-1">Stop Receiving?</h3>
               <p className="text-[11px] text-slate-400 mb-3">
-                Stop discovering nearby devices.
+                This will end your radar visibility and stop incoming transfers.
               </p>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowExitConfirm(false)}
-                  className="flex-1 py-1.5 rounded-xl neu-flat text-[11px] font-semibold text-slate-300 hover:text-white"
+                  className="flex-1 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-white transition-all cursor-pointer"
                 >
                   Stay
                 </button>
                 <button
                   onClick={handleConfirmExit}
-                  className="flex-1 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold"
+                  className="flex-1 py-1.5 rounded-xl bg-red-500 hover:bg-red-600 text-xs font-bold text-white shadow-lg transition-all cursor-pointer"
                 >
-                  Stop
+                  Exit
                 </button>
               </div>
             </motion.div>
@@ -101,152 +159,162 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Positioned directly above the nav bar, elevated just enough behind the Share button (z-30) */}
-      <div className="fixed bottom-[76px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+      {/* Main Receive Floating Sheet */}
+      <div className="fixed bottom-16 left-0 right-0 z-40 flex flex-col items-center pointer-events-none px-4">
         <motion.div
-          layout
-          initial={{ opacity: 0, y: 35, scale: 0.92 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 35, scale: 0.92 }}
-          transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-          className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
+          initial={{ y: 80, opacity: 0, scale: 0.95 }}
+          animate={{
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            height: isCollapsed ? '52px' : 'auto',
+          }}
+          exit={{ y: 80, opacity: 0, scale: 0.95 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+          className="w-full max-w-[340px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#161720]/95 backdrop-blur-md shadow-[0_15px_40px_rgba(0,0,0,0.85)] overflow-hidden"
         >
-          {isCollapsed ? (
-            /* COLLAPSED BUTTON VIEW - SITS JUST A BIT HIGHER, PERFECTLY VISIBLE */
-            <motion.div
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setIsCollapsed(false)}
-              className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
-            >
-              {/* Left Wing */}
-              <div className="flex items-center gap-1.5">
-                <div className="p-1 rounded-lg neu-pressed text-[#2ee86f]">
-                  <ChevronUp size={13} />
-                </div>
-                <span className="text-[11px] font-bold text-white group-hover:text-[#2ee86f] transition-colors">
-                  Devices ({peers.length})
-                </span>
-              </div>
+          {/* Header Row */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#2ee86f] animate-ping" />
+              <span className="text-xs font-bold text-white">Receive Files</span>
+              <span className="text-[10px] text-slate-400">
+                ({radarDevices.length} nearby)
+              </span>
+            </div>
 
-              {/* Center Spacer for Share Button */}
-              <div className="w-12 h-4" />
-
-              {/* Right Wing */}
+            <div className="flex items-center gap-1">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAttemptClose();
-                }}
-                className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                title="Exit"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title={isCollapsed ? 'Expand' : 'Minimize'}
               >
-                <X size={13} />
+                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
-            </motion.div>
-          ) : (
-            /* EXPANDED FULL RADAR CARD VIEW - RISES UP FROM BEHIND THE SHARE BUTTON */
-            <motion.div
-              layout
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.2 }}
-              className="p-3 pb-3.5 flex flex-col items-center text-center"
-            >
-              {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
-              <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setIsCollapsed(true)}
-                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    title="Collapse down"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
-                  <span className="text-[10px] font-bold text-slate-300">
-                    Nearby Devices ({peers.length})
-                  </span>
+
+              <button
+                onClick={handleAttemptClose}
+                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Expanded Content */}
+          {!isCollapsed && (
+            <div className="p-4 flex flex-col items-center text-center space-y-3">
+              
+              {/* Scan QR Code Action Button */}
+              <button
+                onClick={handleStartQrScan}
+                disabled={isScanning}
+                className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-[#22c55e] to-[#39f07c] text-black font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(46,232,111,0.4)] hover:brightness-110 active:scale-98 transition-all cursor-pointer"
+              >
+                <QrCode size={16} className="stroke-[2.5]" />
+                <span>{isScanning ? 'Scanning...' : 'Scan Sender QR Code'}</span>
+              </button>
+
+              {/* Progress info if downloading */}
+              {progressInfo && (
+                <div className="w-full p-2.5 rounded-2xl bg-black/40 border border-white/5 text-left space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-white">
+                    <span className="truncate max-w-[180px]">{progressInfo.fileName}</span>
+                    <span className="text-[#2ee86f]">
+                      {Math.round((progressInfo.loaded / progressInfo.total) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    <div
+                      className="h-full bg-[#2ee86f] transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.round((progressInfo.loaded / progressInfo.total) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>File {progressInfo.fileIndex} of {progressInfo.fileCount}</span>
+                    <span>{progressInfo.speedMbps.toFixed(1)} MB/s</span>
+                  </div>
                 </div>
+              )}
 
-                <button
-                  onClick={handleAttemptClose}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
-                  title="Close"
-                >
-                  <X size={13} />
-                </button>
-              </div>
+              {/* Status Message */}
+              {statusMessage && (
+                <p className="text-[11px] text-emerald-400">{statusMessage}</p>
+              )}
 
-              {/* Clean Scattered Radar Canvas without pulses */}
-              <div className="relative w-44 h-44 flex items-center justify-center my-1 overflow-visible">
-                {/* Clean Static Radar Rings */}
-                <div className="absolute w-40 h-40 rounded-full border border-white/5 pointer-events-none" />
-                <div className="absolute w-28 h-28 rounded-full border border-white/10 pointer-events-none" />
-                <div className="absolute w-16 h-16 rounded-full border border-[#2ee86f]/20 pointer-events-none" />
+              {/* Minimal Radar Container */}
+              <div className="relative w-44 h-44 rounded-full bg-[#0d0f16]/90 border border-[#2ee86f]/20 flex items-center justify-center overflow-hidden shadow-inner">
+                {/* Concentric Radar Rings */}
+                <div className="absolute inset-4 rounded-full border border-[#2ee86f]/15 pointer-events-none" />
+                <div className="absolute inset-10 rounded-full border border-[#2ee86f]/20 pointer-events-none" />
+                <div className="absolute inset-16 rounded-full border border-[#2ee86f]/25 pointer-events-none" />
 
-                {/* Center Self Device */}
-                <div className="relative z-10 w-9 h-9 rounded-full neu-raised border-2 border-[#2ee86f] flex flex-col items-center justify-center p-0.5 shadow-md">
+                {/* Rotating Scanner Line */}
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
+                  className="absolute inset-0 origin-center pointer-events-none"
+                  style={{
+                    background:
+                      'conic-gradient(from 0deg, transparent 0deg, transparent 270deg, rgba(46,232,111,0.18) 360deg)',
+                  }}
+                />
+
+                {/* Center Self Avatar */}
+                <div className="relative z-10 w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-[#22c55e] to-white shadow-[0_0_15px_rgba(46,232,111,0.6)] flex items-center justify-center">
                   <img
                     src={myProfile.avatar}
                     alt={myProfile.name}
-                    className="w-5 h-5 rounded-full object-cover"
+                    className="w-full h-full rounded-full object-cover"
                   />
-                  <span className="text-[6px] font-bold text-white max-w-[30px] truncate text-center leading-none">
-                    You
-                  </span>
                 </div>
 
-                {/* Scattered Non-overlapping Orbiting Devices in 4 Quadrants */}
-                {peers.slice(0, 4).map((peer, idx) => {
-                  const offset = quadrantOffsets[idx % quadrantOffsets.length];
+                {/* Discovered Peer Avatars */}
+                {radarDevices.slice(0, 4).map((peer, idx) => {
+                  const offset = quadrantOffsets[idx] || { x: 0, y: 0 };
                   const isConnecting = connectingPeerId === peer.id;
 
                   return (
-                    <motion.div
+                    <motion.button
                       key={peer.id}
-                      initial={{ opacity: 0, scale: 0.5 }}
-                      animate={{
-                        x: offset.x,
-                        y: offset.y,
-                        opacity: 1,
-                        scale: 1,
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      whileHover={{ scale: 1.15 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleSelectDevice(peer)}
+                      className={`absolute z-20 flex flex-col items-center cursor-pointer group ${
+                        isConnecting ? 'animate-pulse' : ''
+                      }`}
+                      style={{
+                        transform: `translate(${offset.x}px, ${offset.y}px)`,
                       }}
-                      transition={{ type: 'spring', stiffness: 350, damping: 25, delay: idx * 0.04 }}
-                      className="absolute z-20 flex flex-col items-center"
+                      title={`Connect to ${peer.name}`}
                     >
-                      <button
-                        onClick={() => handleSelectDevice(peer)}
-                        className="flex flex-col items-center group cursor-pointer focus:outline-none"
-                      >
-                        <div className="relative">
-                          <img
-                            src={peer.avatar}
-                            alt={peer.name}
-                            className={`w-7 h-7 rounded-full object-cover border-2 ${
-                              isConnecting
-                                ? 'border-[#2ee86f] ring-2 ring-[#2ee86f]'
-                                : 'border-white/20 group-hover:border-[#2ee86f]'
-                            } shadow-md transition-all`}
-                          />
-                          <div className="absolute -bottom-0.5 -right-0.5 p-0.5 rounded-full bg-[#121316]">
-                            {getOsIcon(peer.os)}
-                          </div>
+                      <div className="relative w-8 h-8 rounded-full p-0.5 bg-[#171922] border-2 border-[#2ee86f]/80 shadow-[0_0_10px_rgba(46,232,111,0.4)] group-hover:border-[#2ee86f] transition-all">
+                        <img
+                          src={peer.avatar}
+                          alt={peer.name}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                        <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-[#11131a] border border-white/20">
+                          {getOsIcon(peer.os)}
                         </div>
-                        <span className="text-[7px] font-semibold text-slate-200 mt-0.5 max-w-[50px] truncate px-1 rounded bg-[#121316]/90 border border-white/10 group-hover:text-[#2ee86f] transition-colors">
-                          {peer.name.split(' ')[0]}
-                        </span>
-                      </button>
-                    </motion.div>
+                      </div>
+                      <span className="text-[9px] font-medium text-slate-300 group-hover:text-white truncate max-w-[50px] drop-shadow-md">
+                        {peer.name.split(' ')[0]}
+                      </span>
+                    </motion.button>
                   );
                 })}
               </div>
 
-              <p className="text-[9px] text-slate-400 mt-0.5">
-                Tap any device above to connect & receive
-              </p>
-            </motion.div>
+              <span className="text-[10px] text-slate-400">
+                Tap a peer to initiate direct connection
+              </span>
+            </div>
           )}
         </motion.div>
       </div>

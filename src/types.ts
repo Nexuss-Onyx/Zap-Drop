@@ -23,6 +23,7 @@ export interface DeviceFile {
   previewUrl?: string;
   blob?: Blob;
   extension: string;
+  nativeUri?: string;
 }
 
 export interface TransferRecord {
@@ -45,6 +46,7 @@ export interface TransferRecord {
   status: 'transferring' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   speedMbps: number;
+  filePath?: string;
 }
 
 export interface FolderNode {

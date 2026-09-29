@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Folder,
@@ -18,8 +18,9 @@ import {
   Eye,
   Trash2,
 } from 'lucide-react';
-import { DeviceFile, FileCategory } from '../types';
-import { DEFAULT_DEVICE_FOLDERS, PlatformBridge } from '../services/platformBridge';
+import { DeviceFile, FileCategory, FolderNode } from '../types';
+import { loadFiles, loadFolders } from '../services/library';
+import { pickAnyFiles } from '../services/picker';
 import { formatFileSize } from '../services/mockNetwork';
 
 interface DeviceExplorerProps {
@@ -34,7 +35,7 @@ interface DeviceExplorerProps {
 }
 
 export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
-  files,
+  files: initialFiles,
   selectedFiles,
   onToggleSelectFile,
   onSelectAll,
@@ -43,15 +44,41 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
   onAddNewFiles,
   onDeleteFile,
 }) => {
+  const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [deviceFiles, setDeviceFiles] = useState<DeviceFile[]>(initialFiles);
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<FileCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [previewFile, setPreviewFile] = useState<DeviceFile | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filteredFiles = files.filter((file) => {
+  // Load real folders on mount
+  useEffect(() => {
+    loadFolders().then((f) => {
+      if (f && f.length > 0) setFolders(f);
+    });
+  }, []);
+
+  // Load real files when category or folder changes
+  useEffect(() => {
+    setIsLoading(true);
+    loadFiles(selectedCategory, currentFolder || undefined, searchQuery || undefined)
+      .then((loaded) => {
+        if (loaded && loaded.length > 0) {
+          setDeviceFiles(loaded);
+        } else if (initialFiles.length > 0) {
+          setDeviceFiles(initialFiles);
+        }
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [selectedCategory, currentFolder, searchQuery, initialFiles]);
+
+  const filteredFiles = deviceFiles.filter((file) => {
     if (selectedCategory !== 'all' && file.category !== selectedCategory) return false;
-    if (currentFolder && !file.path.includes(currentFolder)) return false;
+    if (currentFolder && !file.path.toLowerCase().includes(currentFolder.toLowerCase())) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return file.name.toLowerCase().includes(q) || file.extension.toLowerCase().includes(q);
@@ -70,32 +97,10 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
   ];
 
   const handlePickSystemFiles = async () => {
-    const pickedFiles = await PlatformBridge.pickFilesFromDisk();
+    const pickedFiles = await pickAnyFiles();
     if (pickedFiles.length > 0) {
-      const converted: DeviceFile[] = pickedFiles.map((f, i) => {
-        const ext = f.name.split('.').pop()?.toLowerCase() || '';
-        let cat: FileCategory = 'documents';
-        if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'heic', 'raw'].includes(ext)) cat = 'images';
-        else if (['mp4', 'mkv', 'mov', 'avi', 'webm'].includes(ext)) cat = 'videos';
-        else if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext)) cat = 'audio';
-        else if (['apk', 'exe', 'dmg', 'deb'].includes(ext)) cat = 'apps';
-        else if (['zip', 'rar', 'tar', 'gz', '7z'].includes(ext)) cat = 'archives';
-
-        return {
-          id: `file-${Date.now()}-${i}`,
-          name: f.name,
-          path: `/storage/emulated/0/${f.name}`,
-          size: f.size,
-          modifiedDate: 'Just now',
-          category: cat,
-          mimeType: f.type || 'application/octet-stream',
-          isDirectory: false,
-          extension: ext,
-          previewUrl: cat === 'images' ? URL.createObjectURL(f) : undefined,
-          blob: f,
-        };
-      });
-      onAddNewFiles(converted);
+      onAddNewFiles(pickedFiles);
+      setDeviceFiles((prev) => [...pickedFiles, ...prev]);
     }
   };
 
@@ -136,7 +141,7 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
 
         <button
           onClick={handlePickSystemFiles}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#22c55e] text-black text-xs font-bold shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:bg-[#16a34a] transition-all shrink-0"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#22c55e] text-black text-xs font-bold shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:bg-[#16a34a] transition-all shrink-0 cursor-pointer"
         >
           <FolderPlus size={14} className="stroke-[2.5]" />
           <span>Add Files</span>
@@ -145,7 +150,7 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
         <div className="flex items-center p-1 rounded-2xl neu-pressed border border-white/5 shrink-0">
           <button
             onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded-xl transition-all ${
+            className={`p-1.5 rounded-xl transition-all cursor-pointer ${
               viewMode === 'grid' ? 'neu-raised text-[#22c55e]' : 'text-slate-400'
             }`}
           >
@@ -153,7 +158,7 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
           </button>
           <button
             onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-xl transition-all ${
+            className={`p-1.5 rounded-xl transition-all cursor-pointer ${
               viewMode === 'list' ? 'neu-raised text-[#22c55e]' : 'text-slate-400'
             }`}
           >
@@ -163,15 +168,15 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
       </div>
 
       {/* Device Storage Folders */}
-      {!currentFolder && (
+      {!currentFolder && folders.length > 0 && (
         <div className="mb-5">
           <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 px-1">
             Folders
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {DEFAULT_DEVICE_FOLDERS.slice(0, 4).map((folder) => (
+            {folders.slice(0, 4).map((folder) => (
               <div
-                key={folder.path}
+                key={folder.name}
                 onClick={() => setCurrentFolder(folder.name)}
                 className="p-3 rounded-2xl neu-raised border border-white/5 hover:border-[#22c55e]/40 cursor-pointer group transition-all"
               >
@@ -202,7 +207,7 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
           </div>
           <button
             onClick={() => setCurrentFolder(null)}
-            className="text-[10px] text-slate-400 hover:text-white"
+            className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
           >
             All Folders
           </button>
@@ -217,10 +222,10 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-3 py-1.5 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-[#22c55e] text-black font-bold shadow-sm'
-                  : 'neu-raised text-slate-300 hover:text-white border border-white/5'
+                  ? 'bg-[#22c55e] text-black shadow-[0_0_12px_rgba(34,197,94,0.35)]'
+                  : 'neu-raised text-slate-400 hover:text-white border border-white/5'
               }`}
             >
               {cat.label}
@@ -229,37 +234,58 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
         })}
       </div>
 
-      {/* File List / Grid */}
-      {filteredFiles.length === 0 ? (
-        <div className="p-8 text-center neu-pressed rounded-3xl border border-white/5 my-4">
-          <Folder size={32} className="text-slate-600 mx-auto mb-2" />
-          <p className="text-xs font-bold text-slate-300">No files found</p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      {/* Files Header / Selection Counter */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <span className="text-xs text-slate-400">
+          {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
+        </span>
+        {selectedFiles.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onSelectAll}
+              className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
+            >
+              Select All
+            </button>
+            <button
+              onClick={onClearSelection}
+              className="text-[11px] text-emerald-400 font-semibold cursor-pointer"
+            >
+              Clear ({selectedFiles.length})
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Grid or List View */}
+      {viewMode === 'grid' ? (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
           {filteredFiles.map((file) => {
             const isSelected = selectedFiles.some((f) => f.id === file.id);
             return (
-              <div
+              <motion.div
                 key={file.id}
+                whileTap={{ scale: 0.96 }}
                 onClick={() => onToggleSelectFile(file)}
-                className={`relative p-3 rounded-2xl flex flex-col justify-between cursor-pointer transition-all ${
+                className={`relative p-2.5 rounded-2xl neu-raised border transition-all cursor-pointer group flex flex-col items-center text-center ${
                   isSelected
-                    ? 'bg-[#183020] border-2 border-[#22c55e]'
-                    : 'neu-raised border border-white/5 hover:border-[#22c55e]/40'
+                    ? 'border-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.25)] bg-[#171922]'
+                    : 'border-white/5 hover:border-white/20'
                 }`}
               >
-                {/* Checkbox */}
+                {/* Selection indicator */}
                 <div
-                  className={`absolute top-2 right-2 z-10 w-5 h-5 rounded-full flex items-center justify-center ${
-                    isSelected ? 'bg-[#22c55e] text-black' : 'neu-pressed text-transparent border border-white/10'
+                  className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-all z-10 ${
+                    isSelected
+                      ? 'bg-[#22c55e] text-black shadow-md'
+                      : 'border border-white/30 group-hover:border-white/60'
                   }`}
                 >
-                  <CheckCircle2 size={13} className="fill-current" />
+                  {isSelected && <CheckCircle2 size={13} className="stroke-[3]" />}
                 </div>
 
-                {/* Thumbnail */}
-                <div className="w-full aspect-square rounded-xl neu-pressed flex items-center justify-center overflow-hidden mb-2 bg-[#111216]">
+                {/* Thumbnail / Icon */}
+                <div className="w-14 h-14 rounded-xl neu-pressed flex items-center justify-center overflow-hidden mb-2 relative">
                   {file.previewUrl ? (
                     <img src={file.previewUrl} alt={file.name} className="w-full h-full object-cover" />
                   ) : (
@@ -267,11 +293,15 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
                   )}
                 </div>
 
-                <div>
-                  <div className="text-xs font-bold text-slate-200 truncate">{file.name}</div>
-                  <div className="text-[10px] text-[#22c55e] font-mono mt-0.5">{formatFileSize(file.size)}</div>
+                <div className="w-full">
+                  <div className="text-[11px] font-bold text-slate-200 group-hover:text-white truncate">
+                    {file.name}
+                  </div>
+                  <div className="text-[9px] text-slate-500 mt-0.5">
+                    {formatFileSize(file.size)}
+                  </div>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -283,73 +313,73 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
               <div
                 key={file.id}
                 onClick={() => onToggleSelectFile(file)}
-                className={`p-2.5 rounded-2xl flex items-center justify-between cursor-pointer transition-all ${
+                className={`p-3 rounded-2xl neu-raised border flex items-center justify-between gap-3 transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-[#183020] border border-[#22c55e]'
-                    : 'neu-raised border border-white/5 hover:border-[#22c55e]/40'
+                    ? 'border-[#22c55e] bg-[#171922]'
+                    : 'border-white/5 hover:border-white/15'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div
-                    className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                      isSelected ? 'bg-[#22c55e] text-black' : 'neu-pressed text-transparent border border-white/10'
-                    }`}
-                  >
-                    <CheckCircle2 size={13} className="fill-current" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl neu-pressed flex items-center justify-center shrink-0 overflow-hidden">
+                    {file.previewUrl ? (
+                      <img src={file.previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                    ) : (
+                      getFileCategoryIcon(file.category)
+                    )}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-200 truncate">{file.name}</div>
-                    <div className="text-[10px] text-slate-400 font-mono">{formatFileSize(file.size)}</div>
+                    <div className="text-xs font-bold text-slate-200 truncate">
+                      {file.name}
+                    </div>
+                    <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
+                      <span>{formatFileSize(file.size)}</span>
+                      <span>•</span>
+                      <span>{file.modifiedDate}</span>
+                    </div>
                   </div>
                 </div>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenSendWithFiles([file]);
-                  }}
-                  className="p-1.5 rounded-xl bg-[#22c55e]/15 text-[#22c55e] hover:bg-[#22c55e]/30"
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                    isSelected
+                      ? 'bg-[#22c55e] text-black shadow-md'
+                      : 'border border-white/30'
+                  }`}
                 >
-                  <Send size={13} />
-                </button>
+                  {isSelected && <CheckCircle2 size={15} className="stroke-[3]" />}
+                </div>
               </div>
             );
           })}
         </div>
       )}
 
-      {/* Floating Action Bar */}
+      {/* Floating Bottom Send Selection Action Bar */}
       <AnimatePresence>
         {selectedFiles.length > 0 && (
           <motion.div
-            initial={{ y: 50, opacity: 0 }}
+            initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 50, opacity: 0 }}
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-sm p-3 rounded-3xl neu-raised border-2 border-[#22c55e] backdrop-blur-xl bg-[#17181e]/95 flex items-center justify-between gap-2 shadow-2xl"
+            exit={{ y: 80, opacity: 0 }}
+            className="fixed bottom-18 left-0 right-0 z-30 flex items-center justify-center px-4 pointer-events-none"
           >
-            <div className="text-left pl-2">
-              <div className="text-xs font-bold text-white">{selectedFiles.length} Selected</div>
-              <div className="text-[10px] font-mono text-[#22c55e]">{formatFileSize(totalSelectedSize)}</div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onClearSelection}
-                className="px-2.5 py-1.5 rounded-xl neu-pressed text-xs text-slate-400"
-              >
-                Clear
-              </button>
+            <div className="pointer-events-auto flex items-center gap-3 px-4 py-2.5 rounded-full bg-[#181a24]/95 border border-[#22c55e]/40 shadow-[0_10px_30px_rgba(0,0,0,0.8)] backdrop-blur-md">
+              <div className="text-xs text-white">
+                <span className="font-bold text-[#22c55e]">{selectedFiles.length}</span> selected
+                <span className="text-slate-400 text-[10px] ml-1.5">({formatFileSize(totalSelectedSize)})</span>
+              </div>
               <button
                 onClick={() => onOpenSendWithFiles(selectedFiles)}
-                className="px-3.5 py-2 rounded-2xl bg-[#22c55e] text-black font-bold text-xs shadow-md flex items-center gap-1"
+                className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#22c55e] to-[#39f07c] text-black text-xs font-bold shadow-lg flex items-center gap-1.5 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
               >
                 <Send size={13} className="stroke-[2.5]" />
-                <span>Send</span>
+                <span>Send Now</span>
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 };
