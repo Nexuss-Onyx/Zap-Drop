@@ -52,22 +52,15 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     }, 500);
   };
 
-  const count = peers.length;
-  const avatarSizeClass =
-    count <= 2 ? 'w-8 h-8' : count <= 4 ? 'w-7 h-7' : 'w-6 h-6';
-
-  const getScatterPosition = (index: number, total: number) => {
-    const baseRadius = total <= 3 ? 46 : 50;
-    const radiusVariation = index % 2 === 0 ? 0 : 10;
-    const r = baseRadius + radiusVariation;
-    const angleStep = (2 * Math.PI) / Math.max(total, 1);
-    const angle = index * angleStep - Math.PI / 2 + (index % 2 === 1 ? 0.25 : -0.2);
-    
-    return {
-      x: Math.round(Math.cos(angle) * r),
-      y: Math.round(Math.sin(angle) * r),
-    };
-  };
+  // 4 well-scattered quadrant positions around center (Radius 56px, scattered evenly in 4 quadrants)
+  const quadrantOffsets = [
+    { x: -55, y: -46 }, // Top-Left
+    { x: 55, y: -46 },  // Top-Right
+    { x: -52, y: 44 },  // Bottom-Left
+    { x: 52, y: 44 },   // Bottom-Right
+    { x: 0, y: -62 },   // Top-Center
+    { x: 0, y: 62 },    // Bottom-Center
+  ];
 
   return (
     <>
@@ -79,7 +72,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-[260px] neu-raised rounded-3xl border border-white/10 p-4 bg-[#171821] text-center shadow-2xl"
+              className="w-full max-w-[250px] neu-raised rounded-3xl border border-white/10 p-4 bg-[#171821] text-center shadow-2xl"
             >
               <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mx-auto mb-2">
                 <AlertCircle size={18} />
@@ -107,9 +100,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Docked Card Attached Directly Above Bottom Nav */}
-      <div className="fixed bottom-[58px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center px-4">
-        <div className="w-full max-w-[300px] pointer-events-auto">
+      {/* Docked Card Width Exactly 280px sitting right above the 280px Navigation Bar */}
+      <div className="fixed bottom-[48px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+        <div className="w-[280px] pointer-events-auto">
           <AnimatePresence mode="wait">
             {isCollapsed ? (
               /* COLLAPSED TAB ATTACHED DIRECTLY UNDER/ABOVE NAV */
@@ -120,15 +113,15 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 exit={{ opacity: 0, y: 35, scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 450, damping: 30 }}
                 onClick={() => setIsCollapsed(false)}
-                className="p-2 px-3 rounded-t-2xl rounded-b-lg neu-raised border-t border-x border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_-8px_25px_rgba(0,0,0,0.7)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
+                className="w-full p-2 px-3 rounded-t-2xl rounded-b-lg neu-raised border-t border-x border-[#2ee86f]/40 bg-[#16181f]/95 shadow-[0_-8px_25px_rgba(0,0,0,0.8)] flex items-center justify-between cursor-pointer hover:border-[#2ee86f] transition-all"
               >
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-lg bg-[#2ee86f]/20 text-[#2ee86f] flex items-center justify-center">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f] animate-ping" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
                   </div>
                   <div className="text-left">
                     <div className="text-[10px] font-bold text-white leading-none">Radar Active</div>
-                    <div className="text-[9px] text-slate-400 mt-0.5">({peers.length} found) • Tap to expand</div>
+                    <div className="text-[9px] text-slate-400 mt-0.5">({peers.length} devices) • Tap to expand</div>
                   </div>
                 </div>
 
@@ -154,19 +147,19 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 </div>
               </motion.div>
             ) : (
-              /* DOCKED SMALL CARD - SLIDES UP FROM BEHIND THE NAV */
+              /* DOCKED SMALL CARD - EXACT 280PX WIDTH SITTING FLUSH ON TOP OF NAV */
               <motion.div
                 key="expanded-receive"
-                initial={{ opacity: 0, y: 40, scale: 0.95 }}
+                initial={{ opacity: 0, y: 35, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 45, scale: 0.92 }}
+                exit={{ opacity: 0, y: 40, scale: 0.92 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 28 }}
                 className="w-full neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_8px_35px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md mb-1"
               >
                 {/* Header Bar */}
                 <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f] animate-ping" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#2ee86f]" />
                     <span className="text-[10px] font-bold text-slate-300">
                       Nearby Devices ({peers.length})
                     </span>
@@ -190,15 +183,15 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                   </div>
                 </div>
 
-                {/* Compact Scattered Radar Screen */}
-                <div className="relative w-38 h-38 flex items-center justify-center my-0.5">
-                  {/* Sonar pulses */}
-                  <div className="absolute inset-0 rounded-full border border-[#2ee86f]/15 animate-radar pointer-events-none" />
-                  <div className="absolute inset-4 rounded-full border border-[#2ee86f]/20 animate-radar-delayed pointer-events-none" />
-                  <div className="absolute inset-8 rounded-full border border-[#2ee86f]/15 pointer-events-none" />
+                {/* Clean Scattered Radar Canvas (Without Pulses) */}
+                <div className="relative w-44 h-44 flex items-center justify-center my-1 overflow-visible">
+                  {/* Clean Static Radar Rings (No Pulsing) */}
+                  <div className="absolute w-40 h-40 rounded-full border border-white/5 pointer-events-none" />
+                  <div className="absolute w-28 h-28 rounded-full border border-white/10 pointer-events-none" />
+                  <div className="absolute w-16 h-16 rounded-full border border-[#2ee86f]/20 pointer-events-none" />
 
                   {/* Center Self Device */}
-                  <div className="relative z-10 w-9 h-9 rounded-full neu-raised border-2 border-[#2ee86f] flex flex-col items-center justify-center p-0.5 shadow-[0_0_12px_rgba(46,232,111,0.4)]">
+                  <div className="relative z-10 w-9 h-9 rounded-full neu-raised border-2 border-[#2ee86f] flex flex-col items-center justify-center p-0.5 shadow-md">
                     <img
                       src={myProfile.avatar}
                       alt={myProfile.name}
@@ -209,43 +202,47 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Scattered Non-overlapping Orbiting Devices */}
-                  {peers.map((peer, idx) => {
-                    const pos = getScatterPosition(idx, peers.length);
+                  {/* Scattered Non-overlapping Orbiting Devices (Positioned in 4 distinct quadrants) */}
+                  {peers.slice(0, 4).map((peer, idx) => {
+                    const offset = quadrantOffsets[idx % quadrantOffsets.length];
                     const isConnecting = connectingPeerId === peer.id;
 
                     return (
-                      <motion.button
+                      <motion.div
                         key={peer.id}
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        transition={{ delay: 0.05 + idx * 0.05 }}
-                        whileHover={{ scale: 1.15 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => handleSelectDevice(peer)}
-                        style={{
-                          transform: `translate(${pos.x}px, ${pos.y}px)`,
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{
+                          x: offset.x,
+                          y: offset.y,
+                          opacity: 1,
+                          scale: 1,
                         }}
-                        className="absolute z-20 flex flex-col items-center group cursor-pointer"
+                        transition={{ type: 'spring', stiffness: 350, damping: 25, delay: idx * 0.05 }}
+                        className="absolute z-20 flex flex-col items-center"
                       >
-                        <div className="relative">
-                          <img
-                            src={peer.avatar}
-                            alt={peer.name}
-                            className={`${avatarSizeClass} rounded-full object-cover border-2 ${
-                              isConnecting
-                                ? 'border-[#2ee86f] ring-2 ring-[#2ee86f] animate-pulse'
-                                : 'border-white/20 group-hover:border-[#2ee86f]'
-                            } shadow-md transition-all`}
-                          />
-                          <div className="absolute -bottom-0.5 -right-0.5 p-0.5 rounded-full bg-[#121316]">
-                            {getOsIcon(peer.os)}
+                        <button
+                          onClick={() => handleSelectDevice(peer)}
+                          className="flex flex-col items-center group cursor-pointer focus:outline-none"
+                        >
+                          <div className="relative">
+                            <img
+                              src={peer.avatar}
+                              alt={peer.name}
+                              className={`w-7 h-7 rounded-full object-cover border-2 ${
+                                isConnecting
+                                  ? 'border-[#2ee86f] ring-2 ring-[#2ee86f]'
+                                  : 'border-white/20 group-hover:border-[#2ee86f]'
+                              } shadow-md transition-all`}
+                            />
+                            <div className="absolute -bottom-0.5 -right-0.5 p-0.5 rounded-full bg-[#121316]">
+                              {getOsIcon(peer.os)}
+                            </div>
                           </div>
-                        </div>
-                        <span className="text-[7px] font-semibold text-slate-200 mt-0.5 max-w-[50px] truncate px-1 rounded bg-[#121316]/90 border border-white/10 group-hover:text-[#2ee86f] transition-colors">
-                          {peer.name.split(' ')[0]}
-                        </span>
-                      </motion.button>
+                          <span className="text-[7px] font-semibold text-slate-200 mt-0.5 max-w-[50px] truncate px-1 rounded bg-[#121316]/90 border border-white/10 group-hover:text-[#2ee86f] transition-colors">
+                            {peer.name.split(' ')[0]}
+                          </span>
+                        </button>
+                      </motion.div>
                     );
                   })}
                 </div>
