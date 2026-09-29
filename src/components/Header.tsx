@@ -1,5 +1,6 @@
 import React from 'react';
 import { DeviceProfile, HotspotState } from '../types';
+import brandLogoImg from '../assets/images/brand_mark_combined_1790701385141.jpg';
 import { ZapBrandLogo } from './BottomNav';
 
 interface HeaderProps {
@@ -19,8 +20,12 @@ export const Header: React.FC<HeaderProps> = ({
         
         {/* Brand Logo & Name - Clean Minimalist */}
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-[#1a1d26] border border-[#2ee86f]/30 flex items-center justify-center neu-raised shadow-[0_0_12px_rgba(46,232,111,0.25)]">
-            <ZapBrandLogo size={18} />
+          <div className="w-8 h-8 rounded-xl bg-[#1a1d26] border border-[#2ee86f]/30 flex items-center justify-center neu-raised shadow-[0_0_12px_rgba(46,232,111,0.25)] overflow-hidden">
+            {brandLogoImg ? (
+              <img src={brandLogoImg} alt="Zapdrop Brand" className="w-full h-full object-cover" />
+            ) : (
+              <ZapBrandLogo size={18} />
+            )}
           </div>
           <h1 className="text-base font-bold tracking-tight text-white leading-none">
             Zapdrop
