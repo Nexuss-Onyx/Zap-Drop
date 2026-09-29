@@ -209,16 +209,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           />
         </svg>
 
-        {/* Big Elevated Center Share Button with Zapdrop Brand Icon */}
+        {/* Big Elevated Center Share Button with White Background & Zapdrop Brand Icon */}
         <div className="absolute left-1/2 -translate-x-1/2 top-[-16px] z-20">
           <motion.button
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={handleCenterShareClick}
-            className={`w-13 h-13 rounded-full flex items-center justify-center transition-all cursor-pointer border-2 border-white/25 ${
+            className={`w-13 h-13 rounded-full flex items-center justify-center transition-all cursor-pointer border-2 border-white/80 ${
               isActionMenuOpen
-                ? 'bg-gradient-to-tr from-[#16a34a] to-[#2ee86f] shadow-[0_0_30px_rgba(46,232,111,0.8)] scale-105'
-                : 'bg-gradient-to-tr from-[#22c55e] to-[#39f07c] shadow-[0_6px_22px_rgba(46,232,111,0.55)]'
+                ? 'bg-white shadow-[0_0_30px_rgba(255,255,255,0.9)] scale-105'
+                : 'bg-white shadow-[0_6px_22px_rgba(255,255,255,0.45)]'
             }`}
             title="Zapdrop"
             aria-label="Zapdrop"
