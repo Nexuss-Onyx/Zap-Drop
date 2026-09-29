@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { X, ChevronDown, AlertCircle } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/mockNetwork';
 
@@ -79,19 +79,25 @@ export const SendModal: React.FC<SendModalProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Floating directly above the elevated center Share button and nav bar */}
-      <div className="fixed bottom-[88px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
-        <AnimatePresence mode="wait">
+      {/* Floating directly over and above the nav bar */}
+      <div className="fixed bottom-[84px] left-0 right-0 z-30 pointer-events-none flex flex-col items-center">
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 40, scale: 0.92 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 40, scale: 0.92 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+          className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] backdrop-blur-md overflow-hidden"
+        >
           {isCollapsed ? (
-            /* COLLAPSED BUTTON: EXACT 280PX WIDTH, RESTING CLEARLY ABOVE NAV BAR */
+            /* COLLAPSED BUTTON VIEW - FLUID IN-PLACE TRANSITION */
             <motion.div
-              key="send-collapsed-button"
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.94 }}
-              transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
               onClick={() => setIsCollapsed(false)}
-              className="w-[280px] pointer-events-auto p-2.5 px-3.5 rounded-2xl neu-raised border border-[#2ee86f]/40 bg-[#16181f]/98 shadow-[0_8px_30px_rgba(0,0,0,0.9)] flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
+              className="p-2.5 px-3.5 flex items-center justify-between cursor-pointer group hover:border-[#2ee86f] transition-all"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#2ee86f]" />
@@ -100,34 +106,45 @@ export const SendModal: React.FC<SendModalProps> = ({
                 </span>
               </div>
 
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAttemptClose();
-                }}
-                className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
-                title="Exit"
-              >
-                <X size={13} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsCollapsed(false);
+                  }}
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
+                  title="Expand"
+                >
+                  <ChevronUp size={13} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAttemptClose();
+                  }}
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                  title="Exit"
+                >
+                  <X size={13} />
+                </button>
+              </div>
             </motion.div>
           ) : (
-            /* EXPANDED FULL CARD: SITTING DIRECTLY ABOVE NAV BAR */
+            /* EXPANDED FULL CARD VIEW - FLUID IN-PLACE TRANSITION */
             <motion.div
-              key="send-expanded-card"
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.94 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-              className="w-[280px] pointer-events-auto neu-raised rounded-3xl border border-white/10 p-3 bg-[#16181f]/98 shadow-[0_12px_40px_rgba(0,0,0,0.95)] flex flex-col items-center text-center backdrop-blur-md"
+              layout
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.2 }}
+              className="p-3 flex flex-col items-center text-center"
             >
               {/* Header Bar with Collapse Button at Left, Title, and Close Button at Right */}
               <div className="w-full flex items-center justify-between pb-1 border-b border-white/5 mb-1.5">
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setIsCollapsed(true)}
-                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors"
-                    title="Collapse"
+                    className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title="Collapse down"
                   >
                     <ChevronDown size={13} />
                   </button>
@@ -138,7 +155,7 @@ export const SendModal: React.FC<SendModalProps> = ({
 
                 <button
                   onClick={handleAttemptClose}
-                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors"
+                  className="p-1 rounded-lg neu-pressed text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                   title="Close"
                 >
                   <X size={13} />
@@ -178,7 +195,7 @@ export const SendModal: React.FC<SendModalProps> = ({
               </p>
             </motion.div>
           )}
-        </AnimatePresence>
+        </motion.div>
       </div>
     </>
   );
