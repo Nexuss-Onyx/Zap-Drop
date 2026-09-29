@@ -20,9 +20,10 @@ interface BottomNavProps {
  * Combined Modern Minimalist Luxurious Brand Logo:
  * Seamless synthesis of Image 1 (Notched Bar Base with twin nodes) + Image 2 (Concentric Hotspot Radio Arcs & Transmitter).
  */
-export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
+export const ZapBrandLogo: React.FC<{ size?: number; className?: string; darkContrast?: boolean }> = ({
   size = 24,
   className = '',
+  darkContrast = false,
 }) => (
   <svg
     width={size}
@@ -33,15 +34,15 @@ export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
     className={className}
   >
     <defs>
-      <linearGradient id="zapCombinedGrad" x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#2ee86f" />
-        <stop offset="50%" stopColor="#4ade80" />
-        <stop offset="100%" stopColor="#ffffff" />
+      <linearGradient id={darkContrast ? "zapCombinedGradDark" : "zapCombinedGrad"} x1="10" y1="10" x2="90" y2="90" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor={darkContrast ? "#0d1117" : "#2ee86f"} />
+        <stop offset="50%" stopColor={darkContrast ? "#161b22" : "#4ade80"} />
+        <stop offset="100%" stopColor={darkContrast ? "#0d1117" : "#ffffff"} />
       </linearGradient>
-      <linearGradient id="zapArcGrad" x1="20" y1="15" x2="80" y2="15" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stopColor="#2ee86f" />
-        <stop offset="50%" stopColor="#ffffff" />
-        <stop offset="100%" stopColor="#2ee86f" />
+      <linearGradient id={darkContrast ? "zapArcGradDark" : "zapArcGrad"} x1="20" y1="15" x2="80" y2="15" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stopColor={darkContrast ? "#0a0d14" : "#2ee86f"} />
+        <stop offset="50%" stopColor={darkContrast ? "#ffffff" : "#ffffff"} />
+        <stop offset="100%" stopColor={darkContrast ? "#0a0d14" : "#2ee86f"} />
       </linearGradient>
     </defs>
 
@@ -49,15 +50,15 @@ export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
     {/* Outer Arc */}
     <path
       d="M20 36C27.5 22.5 38 16 50 16C62 16 72.5 22.5 80 36"
-      stroke="url(#zapArcGrad)"
-      strokeWidth="5.5"
+      stroke={darkContrast ? "#0d1117" : "url(#zapArcGrad)"}
+      strokeWidth="6"
       strokeLinecap="round"
     />
     {/* Inner Arc */}
     <path
       d="M31 41C36 32 42.5 27 50 27C57.5 27 64 32 69 41"
-      stroke="#2ee86f"
-      strokeWidth="4.5"
+      stroke={darkContrast ? "#0d1117" : "#2ee86f"}
+      strokeWidth="5"
       strokeLinecap="round"
     />
 
@@ -66,14 +67,14 @@ export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
       cx="50"
       cy="45"
       r="6.5"
-      fill="#ffffff"
+      fill={darkContrast ? "#0d1117" : "#ffffff"}
     />
 
     {/* Vertical Transmitter Stem + Inverted-Y Antenna Base (Image 2) */}
     <path
       d="M50 51.5V63M50 63L39 74M50 63L61 74"
-      stroke="#ffffff"
-      strokeWidth="5"
+      stroke={darkContrast ? "#0d1117" : "#ffffff"}
+      strokeWidth="5.5"
       strokeLinecap="round"
       strokeLinejoin="round"
     />
@@ -81,43 +82,14 @@ export const ZapBrandLogo: React.FC<{ size?: number; className?: string }> = ({
     {/* Notched Docking Bar Base (Image 1) */}
     <path
       d="M10 73C10 68.5817 13.5817 65 18 65H35L44 74C47.5 77.5 52.5 77.5 56 74L65 65H82C86.4183 65 90 68.5817 90 73V81C90 85.4183 86.4183 89 82 89H18C13.5817 89 10 85.4183 10 81V73Z"
-      fill="#141720"
-      stroke="url(#zapCombinedGrad)"
+      fill={darkContrast ? "#0a0d14" : "#141720"}
+      stroke={darkContrast ? "#0a0d14" : "url(#zapCombinedGrad)"}
       strokeWidth="3.5"
     />
 
     {/* Twin Indicator Nodes on the Right (Image 1) */}
     <circle cx="73" cy="77" r="3.5" fill="#2ee86f" />
     <circle cx="83" cy="77" r="3.5" fill="#2ee86f" />
-  </svg>
-);
-
-/**
- * Reverted Exact Share Icon (Curved arrow springing out of open container box)
- */
-export const ZapShareIcon: React.FC<{ size?: number; className?: string; color?: string }> = ({
-  size = 24,
-  className = '',
-  color = 'currentColor',
-}) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 100 100"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    {/* Open Container Box */}
-    <path
-      d="M38 31H19C15.6863 31 13 33.6863 13 37V81C13 84.3137 15.6863 87 19 87H69C72.3137 87 75 84.3137 75 81V62L67.5 56.5V79.5H20.5V38.5H30.5L38 31Z"
-      fill={color}
-    />
-    {/* Curved Arrow Springing Outward to the Top-Right */}
-    <path
-      d="M31.5 61.5C35 48 44.5 35 62.5 30.5V18.5L87 37.5L62.5 56.5V43.5C49 44.5 39 50.5 31.5 61.5Z"
-      fill={color}
-    />
   </svg>
 );
 
@@ -237,7 +209,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           />
         </svg>
 
-        {/* Big Elevated Center Share Button with Reverted Curved Arrow Share Icon */}
+        {/* Big Elevated Center Share Button with Zapdrop Brand Icon */}
         <div className="absolute left-1/2 -translate-x-1/2 top-[-16px] z-20">
           <motion.button
             whileHover={{ scale: 1.08 }}
@@ -245,13 +217,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             onClick={handleCenterShareClick}
             className={`w-13 h-13 rounded-full flex items-center justify-center transition-all cursor-pointer border-2 border-white/25 ${
               isActionMenuOpen
-                ? 'bg-gradient-to-tr from-[#16a34a] to-[#2ee86f] text-black shadow-[0_0_30px_rgba(46,232,111,0.8)] scale-105'
-                : 'bg-gradient-to-tr from-[#22c55e] to-[#39f07c] text-black shadow-[0_6px_22px_rgba(46,232,111,0.55)]'
+                ? 'bg-gradient-to-tr from-[#16a34a] to-[#2ee86f] shadow-[0_0_30px_rgba(46,232,111,0.8)] scale-105'
+                : 'bg-gradient-to-tr from-[#22c55e] to-[#39f07c] shadow-[0_6px_22px_rgba(46,232,111,0.55)]'
             }`}
-            title="Zapdrop Share"
-            aria-label="Zapdrop Share"
+            title="Zapdrop"
+            aria-label="Zapdrop"
           >
-            <ZapShareIcon size={24} color="#0d0e12" />
+            <ZapBrandLogo size={26} darkContrast={true} />
           </motion.button>
         </div>
 
