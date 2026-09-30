@@ -36,10 +36,36 @@ export const SendModal: React.FC<SendModalProps> = ({
 
   const sessionRef = useRef<SendSession | null>(null);
 
+  const initOrRefreshServer = () => {
+    if (!isOpen || selectedFiles.length === 0) return;
+
+    startSend(
+      selectedFiles,
+      (_id, bytes, total) => {
+        setTransferProgress({ bytes, total });
+      },
+      () => {
+        setTransferDone(true);
+      }
+    )
+      .then((session) => {
+        if (sessionRef.current) {
+          sessionRef.current.stop().catch(() => {});
+        }
+        sessionRef.current = session;
+        setQrCodeDataUrl(session.qrCodeUrl);
+        setShortCode(session.code || `${session.ip}:${session.port}:${session.token}`);
+        setErrorMsg(null);
+      })
+      .catch((err) => {
+        setErrorMsg(err.message || 'Failed to start file sharing server');
+      });
+  };
+
   useEffect(() => {
     if (!isOpen || selectedFiles.length === 0) {
       if (sessionRef.current) {
-        sessionRef.current.stop();
+        sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
       }
       setQrCodeDataUrl(null);
@@ -50,49 +76,42 @@ export const SendModal: React.FC<SendModalProps> = ({
       return;
     }
 
-    let isMounted = true;
-
     // Auto-enable hotspot if on native Android and hotspot is OFF
     if (Capacitor.isNativePlatform() && !hotspotState.enabled) {
       ZapdropNative.toggleHotspot({ enable: true }).catch(() => {});
     }
 
-    startSend(
-      selectedFiles,
-      (id, bytes, total) => {
-        if (isMounted) {
-          setTransferProgress({ bytes, total });
+    initOrRefreshServer();
+
+    // Listen for Hotspot State changes to re-bind server with updated IP automatically
+    let sub: any = null;
+    if (Capacitor.isNativePlatform()) {
+      ZapdropNative.addListener('hotspotStateChange', (state) => {
+        if (state.enabled) {
+          initOrRefreshServer();
         }
-      },
-      () => {
-        if (isMounted) {
-          setTransferDone(true);
-        }
-      }
-    )
-      .then((session) => {
-        if (!isMounted) {
-          session.stop();
-          return;
-        }
-        sessionRef.current = session;
-        setQrCodeDataUrl(session.qrCodeUrl);
-        setShortCode(session.code || `${session.ip}:${session.port}:${session.token}`);
-      })
-      .catch((err) => {
-        if (isMounted) {
-          setErrorMsg(err.message || 'Failed to start file sharing server');
-        }
+      }).then((s) => {
+        sub = s;
       });
+    }
 
     return () => {
-      isMounted = false;
+      if (sub) {
+        sub.remove();
+      }
       if (sessionRef.current) {
-        sessionRef.current.stop();
+        sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
       }
     };
   }, [isOpen, selectedFiles]);
+
+  // Re-run server initialization if hotspot state becomes enabled
+  useEffect(() => {
+    if (isOpen && hotspotState.enabled && !qrCodeDataUrl) {
+      initOrRefreshServer();
+    }
+  }, [hotspotState.enabled, isOpen]);
 
   if (!isOpen) return null;
 
@@ -104,7 +123,7 @@ export const SendModal: React.FC<SendModalProps> = ({
 
   const handleConfirmExit = () => {
     if (sessionRef.current) {
-      sessionRef.current.stop();
+      sessionRef.current.stop().catch(() => {});
       sessionRef.current = null;
     }
     setShowExitConfirm(false);
@@ -217,6 +236,7 @@ export const SendModal: React.FC<SendModalProps> = ({
                   onClick={async () => {
                     try {
                       await ZapdropNative.toggleHotspot({ enable: true });
+                      initOrRefreshServer();
                     } catch {}
                   }}
                   className="w-full py-2 px-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-between transition-all cursor-pointer hover:bg-amber-500/30"

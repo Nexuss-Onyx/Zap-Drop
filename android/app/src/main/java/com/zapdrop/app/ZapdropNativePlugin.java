@@ -63,6 +63,12 @@ public class ZapdropNativePlugin extends Plugin {
     private WifiManager.LocalOnlyHotspotReservation hotspotReservation;
     private BroadcastReceiver hotspotReceiver;
 
+    // Cache last server params so server auto-restarts/rebinds when Hotspot becomes ENABLED
+    private String lastToken;
+    private String lastDeviceName;
+    private String lastDeviceId;
+    private JSArray lastFiles;
+
     @Override
     public void load() {
         super.load();
@@ -97,12 +103,20 @@ public class ZapdropNativePlugin extends Plugin {
                         int state = intent.getIntExtra("wifi_state", 0);
                         // 13 = WIFI_AP_STATE_ENABLED, 11 = WIFI_AP_STATE_DISABLED
                         boolean enabled = (state == 13 || isHotspotEnabled());
+                        
                         JSObject o = new JSObject();
                         o.put("enabled", enabled);
-                        o.put("ip", findLocalIp());
+                        String currentIp = findLocalIp();
+                        o.put("ip", currentIp != null ? currentIp : "192.168.43.1");
                         notifyListeners("hotspotStateChange", o);
 
-                        if (!enabled) {
+                        if (state == 13) {
+                            // Hotspot explicitly enabled: ensure server is running if requested
+                            if (lastToken != null && server == null) {
+                                startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
+                            }
+                        } else if (state == 11) {
+                            // Only stop server when hotspot is explicitly DISABLED (11)
                             stopServerInternal();
                         }
                     }
@@ -162,9 +176,10 @@ public class ZapdropNativePlugin extends Plugin {
                             public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
                                 super.onStarted(reservation);
                                 hotspotReservation = reservation;
+                                String ip = findLocalIp();
                                 JSObject r = new JSObject();
                                 r.put("enabled", true);
-                                r.put("ip", findLocalIp());
+                                r.put("ip", ip != null ? ip : "192.168.43.1");
                                 notifyListeners("hotspotStateChange", r);
                                 call.resolve(r);
                             }
@@ -462,8 +477,8 @@ public class ZapdropNativePlugin extends Plugin {
             dir = new File(path);
         }
 
-        if (!dir.exists() || !dir.isDirectory()) {
-            call.reject("Directory does not exist or is not readable");
+        if (!dir.exists()) {
+            call.reject("Directory does not exist: " + (path != null ? path : "root"));
             return;
         }
 
@@ -471,7 +486,7 @@ public class ZapdropNativePlugin extends Plugin {
         File[] files = dir.listFiles();
         String currentPath = dir.getAbsolutePath();
 
-        if (files != null) {
+        if (files != null && files.length > 0) {
             for (File f : files) {
                 if (f.isHidden()) continue;
                 JSObject o = new JSObject();
@@ -499,10 +514,95 @@ public class ZapdropNativePlugin extends Plugin {
             }
         }
 
+        // Fallback: If File.listFiles() returns null or 0 items due to Scoped Storage, query MediaStore!
+        if (items.length() == 0) {
+            queryDirectoryViaMediaStore(dir, items);
+        }
+
         JSObject res = new JSObject();
         res.put("path", currentPath);
         res.put("items", items);
         call.resolve(res);
+    }
+
+    private void queryDirectoryViaMediaStore(File dir, JSArray items) {
+        try {
+            Uri collection = MediaStore.Files.getContentUri("external");
+            String dirPath = dir.getAbsolutePath();
+            if (!dirPath.endsWith("/")) {
+                dirPath = dirPath + "/";
+            }
+
+            String[] proj = {
+                MediaStore.Files.FileColumns._ID,
+                MediaStore.Files.FileColumns.DISPLAY_NAME,
+                MediaStore.Files.FileColumns.SIZE,
+                MediaStore.Files.FileColumns.DATE_MODIFIED,
+                MediaStore.Files.FileColumns.DATA
+            };
+
+            String selection = MediaStore.Files.FileColumns.DATA + " LIKE ?";
+            String[] selectionArgs = new String[]{ dirPath + "%" };
+
+            java.util.Set<String> subDirsAdded = new java.util.HashSet<>();
+
+            try (Cursor cursor = getContext().getContentResolver().query(
+                collection,
+                proj,
+                selection,
+                selectionArgs,
+                MediaStore.Files.FileColumns.DISPLAY_NAME + " ASC"
+            )) {
+                if (cursor != null) {
+                    int nameCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DISPLAY_NAME);
+                    int sizeCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.SIZE);
+                    int dateCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATE_MODIFIED);
+                    int dataCol = cursor.getColumnIndex(MediaStore.Files.FileColumns.DATA);
+
+                    while (cursor.moveToNext()) {
+                        String fullPath = cursor.getString(dataCol);
+                        if (fullPath == null || !fullPath.startsWith(dirPath)) continue;
+
+                        String relative = fullPath.substring(dirPath.length());
+                        if (relative.isEmpty()) continue;
+
+                        int slashIdx = relative.indexOf('/');
+                        if (slashIdx != -1) {
+                            String subDirName = relative.substring(0, slashIdx);
+                            if (!subDirsAdded.contains(subDirName)) {
+                                subDirsAdded.add(subDirName);
+                                File subFile = new File(dirPath + subDirName);
+                                JSObject o = new JSObject();
+                                o.put("name", subDirName);
+                                o.put("path", subFile.getAbsolutePath());
+                                o.put("isDirectory", true);
+                                o.put("size", 0);
+                                o.put("modified", subFile.lastModified() > 0 ? subFile.lastModified() : System.currentTimeMillis());
+                                o.put("itemCount", 1);
+                                o.put("extension", "");
+                                items.put(o);
+                            }
+                        } else {
+                            String name = cursor.getString(nameCol);
+                            if (name == null || name.startsWith(".")) continue;
+
+                            long size = cursor.getLong(sizeCol);
+                            long date = cursor.getLong(dateCol) * 1000L;
+
+                            JSObject o = new JSObject();
+                            o.put("name", name);
+                            o.put("path", fullPath);
+                            o.put("isDirectory", false);
+                            o.put("size", size);
+                            o.put("modified", date);
+                            String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : "";
+                            o.put("extension", ext);
+                            items.put(o);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     // ---------- getLocalIp ----------
@@ -531,18 +631,31 @@ public class ZapdropNativePlugin extends Plugin {
     @PluginMethod
     public void startServer(PluginCall call) {
         try {
-            stopServerInternal();
+            lastToken = call.getString("token");
+            lastDeviceName = call.getString("deviceName", "Zapdrop Mobile");
+            lastDeviceId = call.getString("deviceId", "android-" + System.currentTimeMillis());
+            lastFiles = call.getArray("files");
 
-            // Automatically attempt hotspot enable if off
+            // Auto disable Wi-Fi if enabled so Hotspot can bind cleanly
             if (!isHotspotEnabled() && hotspotReservation == null) {
                 disableWifiIfEnabled();
             }
 
-            String token = call.getString("token");
-            String deviceName = call.getString("deviceName", "Zapdrop Mobile");
-            String deviceId = call.getString("deviceId", "android-" + System.currentTimeMillis());
-            JSArray files = call.getArray("files");
+            startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
 
+            JSObject r = new JSObject();
+            String ip = findLocalIp();
+            r.put("ip", ip != null ? ip : "192.168.43.1");
+            r.put("port", server != null ? server.getListeningPort() : 48556);
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("Cannot start server: " + e.getMessage());
+        }
+    }
+
+    private void startServerInternal(String token, String deviceName, String deviceId, JSArray files) {
+        try {
+            stopServerInternal();
             server = new ZapdropServer(getContext(), 48556, token, deviceName, deviceId, files, new ZapdropServer.Events() {
                 @Override
                 public void onProgress(String id, long bytes, long total) {
@@ -560,25 +673,22 @@ public class ZapdropNativePlugin extends Plugin {
                 }
             });
             server.start();
-            JSObject r = new JSObject();
-            String ip = findLocalIp();
-            r.put("ip", ip != null ? ip : "192.168.43.1");
-            r.put("port", server.getListeningPort());
-            call.resolve(r);
-        } catch (Exception e) {
-            call.reject("Cannot start server: " + e.getMessage());
-        }
+        } catch (Exception ignored) {}
     }
 
     @PluginMethod
     public void stopServer(PluginCall call) {
+        lastToken = null;
+        lastFiles = null;
         stopServerInternal();
         call.resolve();
     }
 
     private void stopServerInternal() {
         if (server != null) {
-            server.stop();
+            try {
+                server.stop();
+            } catch (Exception ignored) {}
             server = null;
         }
     }
