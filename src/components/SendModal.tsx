@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Wifi, Copy, Check } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, Wifi, Copy, Check } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/networkUtils';
 import { startSend, SendSession } from '../services/send';
 import { backend } from '../backend';
-import { Capacitor } from '@capacitor/core';
-import { ZapdropNative } from '../native/zapdrop-native';
 
 interface SendModalProps {
   isOpen: boolean;
@@ -22,15 +20,11 @@ export const SendModal: React.FC<SendModalProps> = ({
   isOpen,
   onClose,
   selectedFiles,
-  hotspotState,
-  myProfile,
   isCollapsed,
   setIsCollapsed,
 }) => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
-  const [serverIp, setServerIp] = useState<string | null>(null);
-  const [serverPort, setServerPort] = useState<number | null>(null);
   const [shortCode, setShortCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [transferProgress, setTransferProgress] = useState<{ bytes: number; total: number } | null>(null);
@@ -75,8 +69,6 @@ export const SendModal: React.FC<SendModalProps> = ({
         }
         sessionRef.current = session;
         setQrCodeDataUrl(session.qrCodeUrl);
-        setServerIp(session.ip);
-        setServerPort(session.port);
         setShortCode(session.code || `${session.ip}:${session.port}:${session.token}`);
       })
       .catch((err) => {
@@ -128,7 +120,7 @@ export const SendModal: React.FC<SendModalProps> = ({
 
   return (
     <>
-      {/* Small Confirmation Modal */}
+      {/* Exit Confirmation Dialog */}
       <AnimatePresence>
         {showExitConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs pointer-events-auto">
@@ -176,12 +168,19 @@ export const SendModal: React.FC<SendModalProps> = ({
           }}
           exit={{ y: 80, opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-          className="w-full max-w-[340px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#161720]/95 backdrop-blur-md shadow-[0_15px_40px_rgba(0,0,0,0.85)] overflow-hidden"
+          className="w-full max-w-[320px] pointer-events-auto neu-raised rounded-3xl border border-white/10 bg-[#161720]/95 backdrop-blur-md shadow-[0_15px_40px_rgba(0,0,0,0.85)] overflow-hidden"
         >
           {/* Header Row */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#2ee86f] animate-pulse" />
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1 -ml-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title={isCollapsed ? 'Expand' : 'Minimize'}
+              >
+                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
               <span className="text-xs font-bold text-white">
                 {transferDone ? 'Transfer Complete' : `Sending ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`}
               </span>
@@ -190,15 +189,7 @@ export const SendModal: React.FC<SendModalProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                title={isCollapsed ? 'Expand' : 'Minimize'}
-              >
-                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-
+            <div className="flex items-center">
               <button
                 onClick={handleAttemptClose}
                 className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
@@ -212,34 +203,34 @@ export const SendModal: React.FC<SendModalProps> = ({
           {/* Expanded Content */}
           {!isCollapsed && (
             <div className="p-4 flex flex-col items-center text-center space-y-3">
-              {/* QR Code Container */}
-              <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center min-w-[170px] min-h-[170px]">
+              {/* QR Code Prominent Container */}
+              <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center min-w-[200px] min-h-[200px]">
                 {qrCodeDataUrl ? (
                   <img
                     src={qrCodeDataUrl}
-                    alt="Scan to Receive"
-                    className="w-36 h-36 object-contain"
+                    alt="Scan QR Code to receive files"
+                    className="w-44 h-44 object-contain"
                   />
                 ) : errorMsg ? (
                   <div className="text-xs text-red-500 p-2">{errorMsg}</div>
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-slate-600">
-                    <Wifi size={24} className="animate-pulse" />
-                    <span className="text-[10px]">Starting Server...</span>
+                    <Wifi size={28} className="animate-pulse text-[#2ee86f]" />
+                    <span className="text-[11px] font-medium text-slate-700">Starting Server...</span>
                   </div>
                 )}
               </div>
 
-              {/* Short code with copy button */}
+              {/* Short Connection Code */}
               {shortCode && (
                 <div className="w-full flex items-center justify-between p-2 rounded-xl bg-black/40 border border-white/10 text-xs">
-                  <span className="font-mono text-[10px] text-emerald-400 truncate max-w-[210px] select-all">
+                  <span className="font-mono text-[10px] text-emerald-400 truncate max-w-[200px] select-all">
                     {shortCode}
                   </span>
                   <button
                     onClick={handleCopyCode}
                     className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] text-white font-semibold transition-all cursor-pointer flex items-center gap-1"
-                    title="Copy code for direct entry"
+                    title="Copy connection code"
                   >
                     {copied ? <Check size={11} className="text-[#2ee86f]" /> : <Copy size={11} />}
                     <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -264,48 +255,6 @@ export const SendModal: React.FC<SendModalProps> = ({
                   </div>
                 </div>
               )}
-
-              {/* Direct Wi-Fi Connection Details & Mobile Hotspot Toggle */}
-              <div className="w-full p-2.5 rounded-2xl bg-black/30 border border-white/5 space-y-2 text-left">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400">Host IP:</span>
-                  <span className="text-[11px] font-mono font-bold text-emerald-400">
-                    {serverIp ? `${serverIp}:${serverPort}` : '192.168.43.1'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400">P2P Network:</span>
-                  <span className="text-[11px] font-medium text-white">{hotspotState.ssid}</span>
-                </div>
-
-                {Capacitor.isNativePlatform() && (
-                  <button
-                    onClick={async () => {
-                      try {
-                        await ZapdropNative.toggleHotspot({ enable: !hotspotState.enabled });
-                      } catch {}
-                    }}
-                    className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
-                      hotspotState.enabled
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                        : 'bg-white/10 text-slate-300 hover:bg-white/15'
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Wifi size={13} className={hotspotState.enabled ? 'text-emerald-400 animate-pulse' : 'text-slate-400'} />
-                      <span>Mobile Hotspot</span>
-                    </span>
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-black/40">
-                      {hotspotState.enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                <ShieldCheck size={12} className="text-[#2ee86f]" />
-                <span>Encrypted offline direct peer-to-peer transfer</span>
-              </div>
             </div>
           )}
         </motion.div>

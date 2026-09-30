@@ -26,6 +26,7 @@ import { IncomingRequestModal, IncomingRequestData } from './components/Incoming
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { App as CapApp } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { ZapdropNative } from './native/zapdrop-native';
 import { backend, isTauri } from './backend';
 
 export default function App() {
@@ -174,7 +175,7 @@ export default function App() {
       });
 
       // Listen for Mobile Hotspot state changes (ON/OFF)
-      ZapdropNative.getHotspotStatus().then((st) => {
+      ZapdropNative.getHotspotStatus().then((st: any) => {
         setHotspotState((prev) => ({
           ...prev,
           enabled: st.enabled,
@@ -182,7 +183,7 @@ export default function App() {
         }));
       }).catch(() => {});
 
-      const hotspotSub = ZapdropNative.addListener('hotspotStateChange', (d) => {
+      const hotspotSub = ZapdropNative.addListener('hotspotStateChange', (d: any) => {
         setHotspotState((prev) => ({
           ...prev,
           enabled: d.enabled,
@@ -194,12 +195,12 @@ export default function App() {
       });
 
       return () => {
-        backSub.then((s) => s.remove());
-        hotspotSub.then((s) => s.remove()).catch(() => {});
+        backSub.then((s: any) => s?.remove());
+        hotspotSub.then((s: any) => s?.remove()).catch(() => {});
         if (netSub instanceof Promise) {
-          netSub.then((s) => s.remove());
+          netSub.then((s: any) => s?.remove());
         } else {
-          netSub.remove();
+          (netSub as any)?.remove();
         }
       };
     }
