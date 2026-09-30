@@ -5,6 +5,8 @@ import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/networkUtils';
 import { startSend, SendSession } from '../services/send';
 import { backend } from '../backend';
+import { Capacitor } from '@capacitor/core';
+import { ZapdropNative } from '../native/zapdrop-native';
 
 interface SendModalProps {
   isOpen: boolean;
@@ -20,6 +22,7 @@ export const SendModal: React.FC<SendModalProps> = ({
   isOpen,
   onClose,
   selectedFiles,
+  hotspotState,
   isCollapsed,
   setIsCollapsed,
 }) => {
@@ -48,6 +51,11 @@ export const SendModal: React.FC<SendModalProps> = ({
     }
 
     let isMounted = true;
+
+    // Auto-enable hotspot if on native Android and hotspot is OFF
+    if (Capacitor.isNativePlatform() && !hotspotState.enabled) {
+      ZapdropNative.toggleHotspot({ enable: true }).catch(() => {});
+    }
 
     startSend(
       selectedFiles,
@@ -203,6 +211,26 @@ export const SendModal: React.FC<SendModalProps> = ({
           {/* Expanded Content */}
           {!isCollapsed && (
             <div className="p-4 flex flex-col items-center text-center space-y-3">
+              {/* Native Hotspot Banner if Disabled */}
+              {Capacitor.isNativePlatform() && !hotspotState.enabled && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await ZapdropNative.toggleHotspot({ enable: true });
+                    } catch {}
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-between transition-all cursor-pointer hover:bg-amber-500/30"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Wifi size={14} className="text-amber-400 animate-pulse" />
+                    <span>Enable Mobile Hotspot</span>
+                  </span>
+                  <span className="text-[10px] bg-amber-500 text-black px-2 py-0.5 rounded-md font-extrabold uppercase">
+                    Turn ON
+                  </span>
+                </button>
+              )}
+
               {/* QR Code Prominent Container */}
               <div className="p-3 bg-white rounded-2xl shadow-xl flex items-center justify-center min-w-[200px] min-h-[200px]">
                 {qrCodeDataUrl ? (

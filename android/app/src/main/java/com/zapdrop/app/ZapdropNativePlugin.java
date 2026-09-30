@@ -41,7 +41,8 @@ import java.util.concurrent.ConcurrentHashMap;
     name = "ZapdropNative",
     permissions = {
         @Permission(strings = {
-            Manifest.permission.READ_EXTERNAL_STORAGE
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE
         }, alias = "storage"),
         @Permission(strings = {
             "android.permission.READ_MEDIA_IMAGES",
@@ -74,6 +75,9 @@ public class ZapdropNativePlugin extends Plugin {
 
     private boolean hasStorageAccess() {
         if (Build.VERSION.SDK_INT < 23) return true;
+        if (Build.VERSION.SDK_INT >= 30) {
+            if (Environment.isExternalStorageManager()) return true;
+        }
         if (Build.VERSION.SDK_INT >= 33) {
             return getPermissionState("media") == PermissionState.GRANTED
                 || getPermissionState("storage") == PermissionState.GRANTED;
@@ -99,7 +103,6 @@ public class ZapdropNativePlugin extends Plugin {
                         notifyListeners("hotspotStateChange", o);
 
                         if (!enabled) {
-                            // If Hotspot was turned off, disconnect active transfers & stop server if needed
                             stopServerInternal();
                         }
                     }
@@ -123,6 +126,15 @@ public class ZapdropNativePlugin extends Plugin {
         return false;
     }
 
+    private void disableWifiIfEnabled() {
+        try {
+            WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null && wifiManager.isWifiEnabled()) {
+                wifiManager.setWifiEnabled(false);
+            }
+        } catch (Exception ignored) {}
+    }
+
     @PluginMethod
     public void getHotspotStatus(PluginCall call) {
         boolean enabled = isHotspotEnabled() || hotspotReservation != null;
@@ -139,6 +151,8 @@ public class ZapdropNativePlugin extends Plugin {
         boolean enable = call.getBoolean("enable", true);
 
         if (enable) {
+            disableWifiIfEnabled();
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
                     WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -167,7 +181,6 @@ public class ZapdropNativePlugin extends Plugin {
                             @Override
                             public void onFailed(int reason) {
                                 super.onFailed(reason);
-                                // Fallback to settings screen
                                 openHotspotSettings();
                                 JSObject r = new JSObject();
                                 r.put("enabled", isHotspotEnabled());
@@ -428,6 +441,19 @@ public class ZapdropNativePlugin extends Plugin {
     // ---------- listDirectory (File Explorer) ----------
     @PluginMethod
     public void listDirectory(PluginCall call) {
+        if (!hasStorageAccess()) {
+            requestPermissionForAlias(permAlias(), call, "dirPermCallback");
+            return;
+        }
+        doListDirectory(call);
+    }
+
+    @PermissionCallback
+    private void dirPermCallback(PluginCall call) {
+        doListDirectory(call);
+    }
+
+    private void doListDirectory(PluginCall call) {
         String path = call.getString("path");
         File dir;
         if (path == null || path.isEmpty() || "root".equalsIgnoreCase(path)) {
@@ -454,6 +480,18 @@ public class ZapdropNativePlugin extends Plugin {
                 o.put("isDirectory", f.isDirectory());
                 o.put("size", f.isDirectory() ? 0 : f.length());
                 o.put("modified", f.lastModified());
+
+                if (f.isDirectory()) {
+                    File[] sub = f.listFiles();
+                    int count = 0;
+                    if (sub != null) {
+                        for (File sf : sub) {
+                            if (!sf.isHidden()) count++;
+                        }
+                    }
+                    o.put("itemCount", count);
+                }
+
                 String name = f.getName();
                 String ext = name.contains(".") ? name.substring(name.lastIndexOf('.') + 1) : "";
                 o.put("extension", ext);
@@ -494,6 +532,12 @@ public class ZapdropNativePlugin extends Plugin {
     public void startServer(PluginCall call) {
         try {
             stopServerInternal();
+
+            // Automatically attempt hotspot enable if off
+            if (!isHotspotEnabled() && hotspotReservation == null) {
+                disableWifiIfEnabled();
+            }
+
             String token = call.getString("token");
             String deviceName = call.getString("deviceName", "Zapdrop Mobile");
             String deviceId = call.getString("deviceId", "android-" + System.currentTimeMillis());
