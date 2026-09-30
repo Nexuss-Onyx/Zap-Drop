@@ -36,18 +36,52 @@ jobs:
       - name: Build Linux desktop bundles
         run: npm run tauri build
 
-      - name: Prepare checksums
+      - name: Prepare checksums and rename artifacts with v prefix
         run: |
           mkdir -p artifacts
-          cp src-tauri/target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
-          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
+          TAG_NAME="${{ github.ref_name }}"
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="v2.0.5"
+          fi
+          if [[ "$TAG_NAME" != v* ]]; then
+            TAG_NAME="v$TAG_NAME"
+          fi
+
+          # Extract version without 'v' for matching (e.g. 2.0.5)
+          VERSION_NO_V="${TAG_NAME#v}"
+
+          # Copy and rename .deb with 'v' prefix: Zapdrop_v2.0.5_amd64.deb
+          for file in src-tauri/target/release/bundle/deb/*.deb; do
+            if [ -f "$file" ]; then
+              base=$(basename "$file")
+              # Replace _2.0.5_ with _v2.0.5_ or prepend v
+              newname=$(echo "$base" | sed -E "s/_${VERSION_NO_V}_/_${TAG_NAME}_/g; s/Zapdrop_${VERSION_NO_V}/Zapdrop_${TAG_NAME}/g; s/zapdrop_${VERSION_NO_V}/Zapdrop_${TAG_NAME}/g")
+              if [ "$newname" = "$base" ]; then
+                newname="Zapdrop_${TAG_NAME}_amd64.deb"
+              fi
+              cp "$file" "artifacts/$newname"
+            fi
+          done
+
+          # Copy and rename .AppImage with 'v' prefix: Zapdrop_v2.0.5_amd64.AppImage
+          for file in src-tauri/target/release/bundle/appimage/*.AppImage; do
+            if [ -f "$file" ]; then
+              base=$(basename "$file")
+              newname=$(echo "$base" | sed -E "s/_${VERSION_NO_V}_/_${TAG_NAME}_/g; s/Zapdrop_${VERSION_NO_V}/Zapdrop_${TAG_NAME}/g; s/zapdrop_${VERSION_NO_V}/Zapdrop_${TAG_NAME}/g")
+              if [ "$newname" = "$base" ]; then
+                newname="Zapdrop_${TAG_NAME}_amd64.AppImage"
+              fi
+              cp "$file" "artifacts/$newname"
+            fi
+          done
+
           cd artifacts
           sha256sum *.deb *.AppImage > SHA256SUMS 2>/dev/null || true
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Zapdrop-${{ github.ref_name || 'v2.0.1' }}-linux
+          name: Zapdrop-${{ github.ref_name || 'v2.0.5' }}-linux
           path: artifacts/*
 
       - name: Attach Linux packages to GitHub release
@@ -64,22 +98,22 @@ jobs:
             #### Debian / Ubuntu / Mint / Pop!_OS (`.deb` Package):
             To override and upgrade an existing Zapdrop installation with this new release:
             ```bash
-            wget https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.deb
-            sudo apt install --reinstall ./Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.deb
+            wget https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name }}_amd64.deb
+            sudo apt install --reinstall ./Zapdrop_${{ github.ref_name }}_amd64.deb
             ```
-            *(Or using dpkg: `sudo dpkg -i ./Zapdrop_*.deb`)*
+            *(Or using dpkg: `sudo dpkg -i ./Zapdrop_${{ github.ref_name }}_amd64.deb`)*
 
             #### Portable AppImage (All Linux Distributions):
             To replace an existing AppImage with the new version:
             ```bash
-            wget -O Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
-            chmod +x Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
-            ./Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
+            wget -O Zapdrop_${{ github.ref_name }}_amd64.AppImage https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name }}_amd64.AppImage
+            chmod +x Zapdrop_${{ github.ref_name }}_amd64.AppImage
+            ./Zapdrop_${{ github.ref_name }}_amd64.AppImage
             ```
             To override any existing shortcut binary in `~/.local/bin`:
             ```bash
             mkdir -p ~/.local/bin
-            mv Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage ~/.local/bin/zapdrop
+            mv Zapdrop_${{ github.ref_name }}_amd64.AppImage ~/.local/bin/zapdrop
             ```
 
             - Verify downloads with `SHA256SUMS`.
