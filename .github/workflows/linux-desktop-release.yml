@@ -59,8 +59,29 @@ jobs:
           body: |
             ## Zapdrop ${{ github.ref_name }} Linux Desktop
 
-            - Debian/Ubuntu: install the `.deb` package with `sudo apt install ./Zapdrop_*.deb`.
-            - Portable Linux: make the `.AppImage` executable with `chmod +x` and run it.
+            ### How to Upgrade / Override Previous Linux Installation:
+
+            #### Debian / Ubuntu / Mint / Pop!_OS (`.deb` Package):
+            To override and upgrade an existing Zapdrop installation with this new release:
+            ```bash
+            wget https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.deb
+            sudo apt install --reinstall ./Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.deb
+            ```
+            *(Or using dpkg: `sudo dpkg -i ./Zapdrop_*.deb`)*
+
+            #### Portable AppImage (All Linux Distributions):
+            To replace an existing AppImage with the new version:
+            ```bash
+            wget -O Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage https://github.com/Nexuss-Onyx/Zap-Drop/releases/download/${{ github.ref_name }}/Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
+            chmod +x Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
+            ./Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage
+            ```
+            To override any existing shortcut binary in `~/.local/bin`:
+            ```bash
+            mkdir -p ~/.local/bin
+            mv Zapdrop_${{ github.ref_name || '2.0.1' }}_amd64.AppImage ~/.local/bin/zapdrop
+            ```
+
             - Verify downloads with `SHA256SUMS`.
           files: |
             artifacts/*.deb
