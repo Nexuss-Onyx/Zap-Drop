@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor, QrCode, KeyRound, Loader2 } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, AlertCircle, Smartphone, Monitor } from 'lucide-react';
 import { DeviceProfile, OSPlatform } from '../types';
-import { startReceive, receiveFromPeer, receiveFromCode, ReceiveProgressInfo } from '../services/receive';
+import { receiveFromPeer, ReceiveProgressInfo } from '../services/receive';
 import { startRadarDiscovery } from '../services/radar';
-import { isTauri } from '../backend';
 
 interface ReceiveModalProps {
   isOpen: boolean;
@@ -27,9 +26,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [connectingPeerId, setConnectingPeerId] = useState<string | null>(null);
   const [radarDevices, setRadarDevices] = useState<DeviceProfile[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
-  const [inputCode, setInputCode] = useState('');
   const [progressInfo, setProgressInfo] = useState<ReceiveProgressInfo | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -38,15 +35,14 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
       setRadarDevices([]);
       setProgressInfo(null);
       setStatusMessage(null);
-      setIsScanning(false);
       setIsReceiving(false);
-      setInputCode('');
       return;
     }
 
     let isMounted = true;
     let stopDiscovery: (() => Promise<void>) | null = null;
 
+    // 1. Start Native / UDP Radar Discovery
     startRadarDiscovery(
       (device) => {
         if (isMounted) {
@@ -65,8 +61,56 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
       stopDiscovery = session.stop;
     });
 
+    // 2. Active Probe for Mobile Hotspots & Local Network Senders (Android Hotspot gateway: 192.168.43.1, 192.168.49.1)
+    const probeHotspots = async () => {
+      const candidateIps = [
+        '192.168.43.1', // Android Portable Hotspot default
+        '192.168.49.1', // Wi-Fi Direct default
+        '192.168.1.1',
+        '192.168.0.1',
+        '10.0.0.1',
+      ];
+
+      for (const ip of candidateIps) {
+        if (!isMounted) break;
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 1200);
+          const res = await fetch(`http://${ip}:48556/api/status`, {
+            signal: controller.signal,
+          }).catch(() => null);
+          clearTimeout(timer);
+
+          if (res && res.ok && isMounted) {
+            const data = await res.json().catch(() => null);
+            if (data && data.deviceId) {
+              const dev: DeviceProfile = {
+                id: data.deviceId,
+                name: data.name || 'Mobile Hotspot Device',
+                avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+                os: (data.platform as OSPlatform) || 'android',
+                signalStrength: 98,
+                status: 'online',
+              };
+              (dev as any).ip = ip;
+              (dev as any).port = 48556;
+
+              setRadarDevices((prev) => {
+                if (prev.some((d) => d.id === dev.id)) return prev;
+                return [...prev, dev];
+              });
+            }
+          }
+        } catch {}
+      }
+    };
+
+    probeHotspots();
+    const interval = setInterval(probeHotspots, 4000);
+
     return () => {
       isMounted = false;
+      clearInterval(interval);
       if (stopDiscovery) stopDiscovery();
     };
   }, [isOpen]);
@@ -93,31 +137,12 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     onClose();
   };
 
-  const handleStartQrScan = async () => {
-    setIsScanning(true);
-    setStatusMessage('Scanning QR code...');
-    try {
-      await startReceive((info) => {
-        setProgressInfo(info);
-      });
-      setStatusMessage('All files received successfully!');
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (e: unknown) {
-      setStatusMessage((e as Error)?.message || 'Scan cancelled or failed');
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
   const handleSelectDevice = async (peer: DeviceProfile) => {
     setConnectingPeerId(peer.id);
     setIsReceiving(true);
     setStatusMessage(`Requesting files from ${peer.name}...`);
 
     try {
-      // In Tauri / desktop mode, connect and pull files from the peer directly
       await receiveFromPeer(
         {
           id: peer.id,
@@ -137,33 +162,10 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     } catch (err: any) {
       const msg = err?.message || err?.toString() || 'Transfer failed';
       setStatusMessage(msg.includes('DECLINED') ? 'Request declined by sender' : msg);
-      // Fallback to onConnectDevice handler
       onConnectDevice(peer);
     } finally {
       setIsReceiving(false);
       setConnectingPeerId(null);
-    }
-  };
-
-  const handleConnectCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputCode.trim()) return;
-
-    setIsReceiving(true);
-    setStatusMessage('Connecting via code...');
-
-    try {
-      await receiveFromCode(inputCode.trim(), (info) => {
-        setProgressInfo(info);
-      });
-      setStatusMessage('All files received successfully!');
-      setTimeout(() => {
-        onClose();
-      }, 1500);
-    } catch (err: any) {
-      setStatusMessage(err?.message || 'Connection with code failed');
-    } finally {
-      setIsReceiving(false);
     }
   };
 
@@ -176,7 +178,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
 
   return (
     <>
-      {/* Small Confirmation Modal */}
+      {/* Confirmation Modal */}
       <AnimatePresence>
         {showExitConfirm && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs pointer-events-auto">
@@ -229,22 +231,21 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
           {/* Header Row */}
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-[#2ee86f] animate-ping" />
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1 -ml-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+                title={isCollapsed ? 'Expand' : 'Minimize'}
+              >
+                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+
               <span className="text-xs font-bold text-white">Receive Files</span>
               <span className="text-[10px] text-slate-400">
                 ({radarDevices.length} nearby)
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsCollapsed(!isCollapsed)}
-                className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
-                title={isCollapsed ? 'Expand' : 'Minimize'}
-              >
-                {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-
+            <div className="flex items-center">
               <button
                 onClick={handleAttemptClose}
                 className="p-1 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
@@ -258,16 +259,6 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
           {/* Expanded Content */}
           {!isCollapsed && (
             <div className="p-4 flex flex-col items-center text-center space-y-3">
-              {/* Scan QR Code Action Button (Primary on mobile, available on desktop with webcam) */}
-              <button
-                onClick={handleStartQrScan}
-                disabled={isScanning || isReceiving}
-                className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-[#22c55e] to-[#39f07c] text-black font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(46,232,111,0.4)] hover:brightness-110 active:scale-98 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <QrCode size={16} className="stroke-[2.5]" />
-                <span>{isScanning ? 'Scanning...' : 'Scan Sender QR Code'}</span>
-              </button>
-
               {/* Progress info if downloading */}
               {progressInfo && (
                 <div className="w-full p-2.5 rounded-2xl bg-black/40 border border-white/5 text-left space-y-1">
@@ -296,11 +287,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
 
               {/* Status Message */}
               {statusMessage && (
-                <p className="text-[11px] text-emerald-400">{statusMessage}</p>
+                <p className="text-[11px] text-emerald-400 font-medium">{statusMessage}</p>
               )}
 
-              {/* Minimal Radar Container */}
-              <div className="relative w-44 h-44 rounded-full bg-[#0d0f16]/90 border border-[#2ee86f]/20 flex items-center justify-center overflow-hidden shadow-inner">
+              {/* Radar Container */}
+              <div className="relative w-48 h-48 rounded-full bg-[#0d0f16]/90 border border-[#2ee86f]/20 flex items-center justify-center overflow-hidden shadow-inner my-1">
                 {/* Concentric Radar Rings */}
                 <div className="absolute inset-4 rounded-full border border-[#2ee86f]/15 pointer-events-none" />
                 <div className="absolute inset-10 rounded-full border border-[#2ee86f]/20 pointer-events-none" />
@@ -318,7 +309,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 />
 
                 {/* Center Self Avatar */}
-                <div className="relative z-10 w-11 h-11 rounded-full p-0.5 bg-gradient-to-tr from-[#22c55e] to-white shadow-[0_0_15px_rgba(46,232,111,0.6)] flex items-center justify-center">
+                <div className="relative z-10 w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-[#22c55e] to-white shadow-[0_0_15px_rgba(46,232,111,0.6)] flex items-center justify-center">
                   <img
                     src={myProfile.avatar}
                     alt={myProfile.name}
@@ -357,7 +348,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                           {getOsIcon(peer.os)}
                         </div>
                       </div>
-                      <span className="text-[9px] font-medium text-slate-300 group-hover:text-white truncate max-w-[50px] drop-shadow-md">
+                      <span className="text-[9px] font-medium text-slate-300 group-hover:text-white truncate max-w-[55px] drop-shadow-md">
                         {peer.name.split(' ')[0]}
                       </span>
                     </motion.button>
@@ -365,35 +356,11 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 })}
               </div>
 
-              <span className="text-[10px] text-slate-400">
+              <span className="text-[11px] text-slate-400 font-medium">
                 {radarDevices.length > 0
-                  ? 'Tap a peer in radar to download files'
-                  : 'Scanning nearby network for real sender devices...'}
+                  ? 'Tap a discovered mobile or desktop device to connect'
+                  : 'Actively searching local Wi-Fi & Mobile Hotspots...'}
               </span>
-
-              {/* Direct Code Entry (Ideal for desktops without camera) */}
-              <div className="w-full pt-1 border-t border-white/5">
-                <form onSubmit={handleConnectCode} className="flex items-center gap-1.5">
-                  <div className="relative flex-1">
-                    <KeyRound size={12} className="absolute left-2.5 top-2.5 text-slate-500" />
-                    <input
-                      type="text"
-                      placeholder="Or enter code (IP:PORT:TOKEN)"
-                      value={inputCode}
-                      onChange={(e) => setInputCode(e.target.value)}
-                      className="w-full pl-7 pr-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-[11px] placeholder-slate-500 focus:outline-hidden focus:border-[#2ee86f]"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!inputCode.trim() || isReceiving}
-                    className="px-3 py-1.5 rounded-xl bg-[#2ee86f]/20 hover:bg-[#2ee86f]/30 border border-[#2ee86f]/40 text-[#2ee86f] text-[11px] font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {isReceiving && <Loader2 size={12} className="animate-spin" />}
-                    <span>Receive</span>
-                  </button>
-                </form>
-              </div>
             </div>
           )}
         </motion.div>
