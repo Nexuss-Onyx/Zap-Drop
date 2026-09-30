@@ -27,51 +27,92 @@ public class ZapdropServer extends NanoHTTPD {
 
     private final Context ctx;
     private final String token;
+    private final String deviceName;
+    private final String deviceId;
     private final Events events;
     private final Map<String, JSONObject> files = new HashMap<>();
     private final JSONArray manifest = new JSONArray();
 
-    public ZapdropServer(Context ctx, int port, String token, JSArray arr, Events ev) throws Exception {
+    public ZapdropServer(Context ctx, int port, String token, String deviceName, String deviceId, JSArray arr, Events ev) throws Exception {
         super(port);
         this.ctx = ctx;
         this.token = token;
+        this.deviceName = deviceName != null ? deviceName : "Zapdrop Android";
+        this.deviceId = deviceId != null ? deviceId : "android-" + System.currentTimeMillis();
         this.events = ev;
-        for (int i = 0; i < arr.length(); i++) {
-            JSONObject f = arr.getJSONObject(i);
-            files.put(f.getString("id"), f);
-            manifest.put(f);
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject f = arr.getJSONObject(i);
+                files.put(f.getString("id"), f);
+                manifest.put(f);
+            }
         }
     }
 
     @Override
     public Response serve(IHTTPSession s) {
-        String t = s.getParms().get("t");
-        if (t == null || !t.equals(token)) {
-            return text(Response.Status.FORBIDDEN, "forbidden");
+        if (s.getMethod() == Method.OPTIONS) {
+            Response r = newFixedLengthResponse(Response.Status.OK, "text/plain", "ok");
+            addCorsHeaders(r);
+            return r;
         }
 
         String uri = s.getUri();
 
-        if (uri.equals("/manifest")) {
-            return newFixedLengthResponse(Response.Status.OK, "application/json", manifest.toString());
+        // Status endpoints for active network probing (desktop -> mobile hotspot)
+        if (uri.equals("/status") || uri.equals("/api/status")) {
+            try {
+                JSONObject res = new JSONObject();
+                res.put("status", "ok");
+                res.put("name", deviceName);
+                res.put("deviceId", deviceId);
+                res.put("platform", "android");
+                res.put("fileCount", files.size());
+                Response r = newFixedLengthResponse(Response.Status.OK, "application/json", res.toString());
+                addCorsHeaders(r);
+                return r;
+            } catch (Exception e) {
+                Response r = text(Response.Status.INTERNAL_ERROR, e.getMessage());
+                addCorsHeaders(r);
+                return r;
+            }
+        }
+
+        String t = s.getParms().get("t");
+        if (t == null || !t.equals(token)) {
+            Response r = text(Response.Status.FORBIDDEN, "forbidden");
+            addCorsHeaders(r);
+            return r;
+        }
+
+        if (uri.equals("/manifest") || uri.equals("/api/manifest")) {
+            Response r = newFixedLengthResponse(Response.Status.OK, "application/json", manifest.toString());
+            addCorsHeaders(r);
+            return r;
         }
 
         if (uri.equals("/done")) {
             events.onDone(s.getHeaders().get("remote-addr"));
-            return text(Response.Status.OK, "ok");
+            Response r = text(Response.Status.OK, "ok");
+            addCorsHeaders(r);
+            return r;
         }
 
         if (uri.startsWith("/file/")) {
             String id = uri.substring(6);
             JSONObject f = files.get(id);
             if (f == null) {
-                return text(Response.Status.NOT_FOUND, "not found");
+                Response r = text(Response.Status.NOT_FOUND, "not found");
+                addCorsHeaders(r);
+                return r;
             }
             try {
                 Uri u = Uri.parse(f.getString("uri"));
                 ParcelFileDescriptor pfd = ctx.getContentResolver().openFileDescriptor(u, "r");
                 if (pfd == null) {
-                    return text(Response.Status.NOT_FOUND, "file descriptor unavailable");
+                    Response r = text(Response.Status.NOT_FOUND, "file descriptor unavailable");
+                    addCorsHeaders(r);
+                    return r;
                 }
                 long total = pfd.getStatSize();
                 FileInputStream in = new FileInputStream(pfd.getFileDescriptor());
@@ -112,12 +153,23 @@ public class ZapdropServer extends NanoHTTPD {
                 if (start > 0) {
                     r.addHeader("Content-Range", "bytes " + start + "-" + (total - 1) + "/" + total);
                 }
+                addCorsHeaders(r);
                 return r;
             } catch (Exception e) {
-                return text(Response.Status.INTERNAL_ERROR, e.getMessage());
+                Response r = text(Response.Status.INTERNAL_ERROR, e.getMessage());
+                addCorsHeaders(r);
+                return r;
             }
         }
-        return text(Response.Status.NOT_FOUND, "not found");
+        Response r = text(Response.Status.NOT_FOUND, "not found");
+        addCorsHeaders(r);
+        return r;
+    }
+
+    private void addCorsHeaders(Response r) {
+        r.addHeader("Access-Control-Allow-Origin", "*");
+        r.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        r.addHeader("Access-Control-Allow-Headers", "*");
     }
 
     private Response text(Response.IStatus st, String m) {

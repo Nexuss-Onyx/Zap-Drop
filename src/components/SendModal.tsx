@@ -5,6 +5,8 @@ import { DeviceFile, DeviceProfile, HotspotState } from '../types';
 import { formatFileSize } from '../services/networkUtils';
 import { startSend, SendSession } from '../services/send';
 import { backend } from '../backend';
+import { Capacitor } from '@capacitor/core';
+import { ZapdropNative } from '../native/zapdrop-native';
 
 interface SendModalProps {
   isOpen: boolean;
@@ -263,8 +265,8 @@ export const SendModal: React.FC<SendModalProps> = ({
                 </div>
               )}
 
-              {/* Direct Wi-Fi Connection Details */}
-              <div className="w-full p-2.5 rounded-2xl bg-black/30 border border-white/5 space-y-1 text-left">
+              {/* Direct Wi-Fi Connection Details & Mobile Hotspot Toggle */}
+              <div className="w-full p-2.5 rounded-2xl bg-black/30 border border-white/5 space-y-2 text-left">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-slate-400">Host IP:</span>
                   <span className="text-[11px] font-mono font-bold text-emerald-400">
@@ -275,6 +277,29 @@ export const SendModal: React.FC<SendModalProps> = ({
                   <span className="text-[10px] text-slate-400">P2P Network:</span>
                   <span className="text-[11px] font-medium text-white">{hotspotState.ssid}</span>
                 </div>
+
+                {Capacitor.isNativePlatform() && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await ZapdropNative.toggleHotspot({ enable: !hotspotState.enabled });
+                      } catch {}
+                    }}
+                    className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
+                      hotspotState.enabled
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                        : 'bg-white/10 text-slate-300 hover:bg-white/15'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Wifi size={13} className={hotspotState.enabled ? 'text-emerald-400 animate-pulse' : 'text-slate-400'} />
+                      <span>Mobile Hotspot</span>
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-black/40">
+                      {hotspotState.enabled ? 'ON' : 'OFF'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-1 text-[10px] text-slate-400">

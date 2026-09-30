@@ -173,8 +173,29 @@ export default function App() {
         setMyProfile((prev) => ({ ...prev, status: online ? 'online' : 'busy' }));
       });
 
+      // Listen for Mobile Hotspot state changes (ON/OFF)
+      ZapdropNative.getHotspotStatus().then((st) => {
+        setHotspotState((prev) => ({
+          ...prev,
+          enabled: st.enabled,
+          ssid: st.ssid || prev.ssid,
+        }));
+      }).catch(() => {});
+
+      const hotspotSub = ZapdropNative.addListener('hotspotStateChange', (d) => {
+        setHotspotState((prev) => ({
+          ...prev,
+          enabled: d.enabled,
+        }));
+        if (!d.enabled) {
+          // Hotspot turned OFF -> close send modal & disconnect
+          setIsSendModalOpen(false);
+        }
+      });
+
       return () => {
         backSub.then((s) => s.remove());
+        hotspotSub.then((s) => s.remove()).catch(() => {});
         if (netSub instanceof Promise) {
           netSub.then((s) => s.remove());
         } else {

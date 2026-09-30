@@ -30,6 +30,12 @@ export interface NativeDirectoryItem {
   extension?: string;
 }
 
+export interface HotspotStatus {
+  enabled: boolean;
+  ip: string;
+  ssid: string;
+}
+
 export interface ZapdropNativePlugin {
   listBuckets(): Promise<{ buckets: NativeBucket[] }>;
   listDirectory(opts?: { path?: string }): Promise<{ path: string; items: NativeDirectoryItem[] }>;
@@ -42,9 +48,13 @@ export interface ZapdropNativePlugin {
   }): Promise<{ items: NativeMediaItem[]; total: number }>;
 
   getLocalIp(): Promise<{ ip: string | null }>;
+  getHotspotStatus(): Promise<HotspotStatus>;
+  toggleHotspot(opts: { enable: boolean }): Promise<{ enabled: boolean; ip?: string }>;
 
   startServer(opts: {
     token: string;
+    deviceName?: string;
+    deviceId?: string;
     files: { id: string; uri: string; name: string; size: number; mime: string }[];
   }): Promise<{ ip: string; port: number }>;
   stopServer(): Promise<void>;
@@ -67,6 +77,10 @@ export interface ZapdropNativePlugin {
   addListener(
     e: 'transferDone',
     cb: (d: { peerIp: string }) => void
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    e: 'hotspotStateChange',
+    cb: (d: { enabled: boolean; ip?: string }) => void
   ): Promise<PluginListenerHandle>;
 }
 
