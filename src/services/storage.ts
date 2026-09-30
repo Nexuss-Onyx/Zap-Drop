@@ -17,7 +17,18 @@ const KEY = 'zapdrop_transfer_history';
 export async function getHistory(): Promise<HistoryItem[]> {
   try {
     const { value } = await Preferences.get({ key: KEY });
-    return value ? JSON.parse(value) : [];
+    if (!value) return [];
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    // Filter out any legacy mock entries
+    return parsed.filter(
+      (item: any) =>
+        item &&
+        !item.id?.startsWith('tr-') &&
+        !item.fileName?.includes('Sunset') &&
+        !item.fileName?.includes('Drone_Footage') &&
+        !item.fileName?.includes('Project_Design')
+    );
   } catch {
     return [];
   }
@@ -34,5 +45,13 @@ export async function addHistory(item: HistoryItem): Promise<void> {
 }
 
 export async function clearHistory(): Promise<void> {
-  await Preferences.remove({ key: KEY });
+  try {
+    await Preferences.remove({ key: KEY });
+    await Preferences.remove({ key: 'history' });
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('zapdrop_transfers');
+      localStorage.removeItem('zapdrop_transfer_history');
+      localStorage.removeItem('history');
+    }
+  } catch {}
 }

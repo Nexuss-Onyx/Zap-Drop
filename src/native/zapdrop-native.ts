@@ -20,8 +20,19 @@ export interface NativeBucket {
   count: number;
 }
 
+export interface NativeDirectoryItem {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size: number;
+  modified: number;
+  itemCount?: number;
+  extension?: string;
+}
+
 export interface ZapdropNativePlugin {
   listBuckets(): Promise<{ buckets: NativeBucket[] }>;
+  listDirectory(opts?: { path?: string }): Promise<{ path: string; items: NativeDirectoryItem[] }>;
   listMedia(opts: {
     type?: NativeMediaType;
     bucket?: string;

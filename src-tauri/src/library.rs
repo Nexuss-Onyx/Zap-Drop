@@ -240,3 +240,135 @@ pub async fn get_thumbnail(app: AppHandle, path: String) -> Result<Option<String
         Ok(Some(out.to_string_lossy().into_owned()))
     }).await.map_err(|e| e.to_string())?
 }
+
+// ---------------- directory explorer ----------------
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryItem {
+    pub name: String,
+    pub path: String,
+    pub is_directory: bool,
+    pub size: u64,
+    pub modified: u64,
+    pub item_count: Option<usize>,
+    pub extension: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct DirectoryResult {
+    pub path: String,
+    pub items: Vec<DirectoryItem>,
+}
+
+#[tauri::command]
+pub fn list_directory(path: Option<String>) -> Result<DirectoryResult, String> {
+    let target_path = match path {
+        Some(ref p) if !p.is_empty() && p != "root" => PathBuf::from(p),
+        _ => {
+            let mut items = Vec::new();
+            let mut push = |label: &str, p: Option<PathBuf>| {
+                if let Some(p) = p {
+                    if p.is_dir() {
+                        let sub_count = fs::read_dir(&p).map(|r| r.count()).unwrap_or(0);
+                        let mod_time = fs::metadata(&p).ok()
+                            .and_then(|m| m.modified().ok())
+                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                            .map(|d| d.as_millis() as u64).unwrap_or(0);
+                        items.push(DirectoryItem {
+                            name: label.to_string(),
+                            path: p.to_string_lossy().into_owned(),
+                            is_directory: true,
+                            size: 0,
+                            modified: mod_time,
+                            item_count: Some(sub_count),
+                            extension: None,
+                        });
+                    }
+                }
+            };
+            push("Downloads", dirs::download_dir());
+            push("Documents", dirs::document_dir());
+            push("Pictures", dirs::picture_dir());
+            push("Videos", dirs::video_dir());
+            push("Music", dirs::audio_dir());
+            push("Desktop", dirs::desktop_dir());
+            if let Some(home) = dirs::home_dir() {
+                if !items.iter().any(|i| i.path == home.to_string_lossy()) {
+                    let sub_count = fs::read_dir(&home).map(|r| r.count()).unwrap_or(0);
+                    items.push(DirectoryItem {
+                        name: "Home".to_string(),
+                        path: home.to_string_lossy().into_owned(),
+                        is_directory: true,
+                        size: 0,
+                        modified: 0,
+                        item_count: Some(sub_count),
+                        extension: None,
+                    });
+                }
+            }
+            return Ok(DirectoryResult {
+                path: "root".to_string(),
+                items,
+            });
+        }
+    };
+
+    if !target_path.is_dir() {
+        return Err("Target path is not a directory".to_string());
+    }
+
+    let mut items = Vec::new();
+    if let Ok(entries) = fs::read_dir(&target_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            if name.starts_with('.') {
+                continue;
+            }
+            let is_dir = path.is_dir();
+            let (size, modified) = fs::metadata(&path).ok().map(|m| {
+                let s = if is_dir { 0 } else { m.len() };
+                let t = m.modified().ok()
+                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as u64).unwrap_or(0);
+                (s, t)
+            }).unwrap_or((0, 0));
+
+            let item_count = if is_dir {
+                fs::read_dir(&path).ok().map(|r| r.count())
+            } else {
+                None
+            };
+
+            let extension = if is_dir {
+                None
+            } else {
+                path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase())
+            };
+
+            items.push(DirectoryItem {
+                name,
+                path: path.to_string_lossy().into_owned(),
+                is_directory: is_dir,
+                size,
+                modified,
+                item_count,
+                extension,
+            });
+        }
+    }
+
+    items.sort_by(|a, b| {
+        match (a.is_directory, b.is_directory) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    Ok(DirectoryResult {
+        path: target_path.to_string_lossy().into_owned(),
+        items,
+    })
+}

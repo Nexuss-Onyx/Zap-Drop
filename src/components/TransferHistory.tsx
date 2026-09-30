@@ -15,7 +15,7 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { TransferRecord } from '../types';
-import { formatFileSize } from '../services/mockNetwork';
+import { formatFileSize } from '../services/networkUtils';
 import { getHistory, clearHistory, HistoryItem } from '../services/storage';
 import { openReceived, shareFile } from '../services/share';
 
@@ -47,39 +47,37 @@ export const TransferHistory: React.FC<TransferHistoryProps> = ({
     onClearHistory();
   };
 
-  // Combine native history with initial mock history for display
-  const combinedHistory = historyItems.length > 0
-    ? historyItems.map((h) => ({
-        id: h.id,
-        fileName: h.fileName,
-        fileSize: h.size,
-        fileType: h.mimeType || 'file',
-        category: (h.fileName.match(/\.(jpg|jpeg|png|webp)$/i)
-          ? 'images'
-          : h.fileName.match(/\.(mp4|mkv|mov)$/i)
-          ? 'videos'
-          : h.fileName.match(/\.(mp3|wav|flac)$/i)
-          ? 'audio'
-          : h.fileName.match(/\.apk$/i)
-          ? 'apps'
-          : 'documents') as TransferRecord['category'],
-        senderId: h.direction === 'sent' ? 'me' : 'peer',
-        senderName: h.direction === 'sent' ? 'Me' : h.peerName,
-        senderAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-        senderOs: 'android' as const,
-        receiverId: h.direction === 'received' ? 'me' : 'peer',
-        receiverName: h.direction === 'received' ? 'Me' : h.peerName,
-        receiverAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-        receiverOs: 'android' as const,
-        direction: h.direction,
-        timestamp: h.at,
-        dateLabel: new Date(h.at).toLocaleDateString(),
-        status: 'completed' as const,
-        progress: 100,
-        speedMbps: 45.8,
-        filePath: h.filePath,
-      }))
-    : initialTransfers;
+  // Only real history items from device transfers
+  const combinedHistory = historyItems.map((h) => ({
+    id: h.id,
+    fileName: h.fileName,
+    fileSize: h.size,
+    fileType: h.mimeType || 'file',
+    category: (h.fileName.match(/\.(jpg|jpeg|png|webp|gif)$/i)
+      ? 'images'
+      : h.fileName.match(/\.(mp4|mkv|mov|avi|3gp)$/i)
+      ? 'videos'
+      : h.fileName.match(/\.(mp3|wav|flac|m4a|aac)$/i)
+      ? 'audio'
+      : h.fileName.match(/\.apk$/i)
+      ? 'apps'
+      : 'documents') as TransferRecord['category'],
+    senderId: h.direction === 'sent' ? 'me' : 'peer',
+    senderName: h.direction === 'sent' ? 'Me' : h.peerName,
+    senderAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
+    senderOs: 'android' as const,
+    receiverId: h.direction === 'received' ? 'me' : 'peer',
+    receiverName: h.direction === 'received' ? 'Me' : h.peerName,
+    receiverAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    receiverOs: 'android' as const,
+    direction: h.direction,
+    timestamp: h.at,
+    dateLabel: new Date(h.at).toLocaleDateString(),
+    status: 'completed' as const,
+    progress: 100,
+    speedMbps: 45.8,
+    filePath: h.filePath,
+  }));
 
   const filteredTransfers = combinedHistory.filter((t) => {
     if (filterType !== 'all' && t.direction !== filterType) return false;

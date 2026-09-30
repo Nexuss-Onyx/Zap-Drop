@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { User, Camera, Check, Radio } from 'lucide-react';
 import { DeviceProfile, HotspotState } from '../types';
-import { AVATAR_PRESETS } from '../services/mockNetwork';
+import { AVATAR_PRESETS } from '../services/networkUtils';
 import { setDeviceName, setAvatar } from '../services/device';
 
 interface ProfileSettingsProps {

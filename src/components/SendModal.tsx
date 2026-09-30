@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ChevronDown, ChevronUp, AlertCircle, ShieldCheck, Wifi, Copy, Check } from 'lucide-react';
 import { DeviceFile, DeviceProfile, HotspotState } from '../types';
-import { formatFileSize } from '../services/mockNetwork';
+import { formatFileSize } from '../services/networkUtils';
 import { startSend, SendSession } from '../services/send';
 import { backend } from '../backend';
 

@@ -59,11 +59,26 @@ export const capacitorBackend: ZapdropBackend = {
   },
 
   async getHistory() {
-    const { value } = await Preferences.get({ key: 'history' });
-    return value ? JSON.parse(value) : [];
+    const { value } = await Preferences.get({ key: 'zapdrop_transfer_history' });
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (t: any) =>
+              t &&
+              !t.id?.startsWith('tr-') &&
+              !t.fileName?.includes('Sunset') &&
+              !t.fileName?.includes('Drone_Footage')
+          )
+        : [];
+    } catch {
+      return [];
+    }
   },
 
   async clearHistory() {
+    await Preferences.remove({ key: 'zapdrop_transfer_history' });
     await Preferences.remove({ key: 'history' });
   },
 

@@ -2,7 +2,6 @@ import { Capacitor } from '@capacitor/core';
 import { ZapdropNative } from '../native/zapdrop-native';
 import { DeviceProfile } from '../types';
 import { getDeviceProfile } from './device';
-import { MOCK_RADAR_DEVICES } from './mock';
 import { backend, isTauri } from '../backend';
 
 export interface RadarDiscoverySession {
@@ -48,13 +47,8 @@ export async function startRadarDiscovery(
   }
 
   if (!Capacitor.isNativePlatform()) {
-    const timer = setTimeout(() => {
-      MOCK_RADAR_DEVICES.forEach((d) => onDeviceFound(d));
-    }, 400);
     return {
-      stop: async () => {
-        clearTimeout(timer);
-      },
+      stop: async () => {},
     };
   }
 

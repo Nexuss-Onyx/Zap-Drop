@@ -36,6 +36,7 @@ pub fn run() {
             library::scan_library,
             library::list_folders,
             library::list_files,
+            library::list_directory,
             library::add_paths,
             library::get_thumbnail,
             net::network_status,

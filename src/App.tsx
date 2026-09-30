@@ -7,13 +7,12 @@ import {
   TransferRecord,
 } from './types';
 import {
-  DEFAULT_SAMPLE_PEERS,
-  INITIAL_TRANSFERS,
   AVATAR_PRESETS,
-} from './services/mockNetwork';
-import { INITIAL_FILES, PlatformBridge } from './services/platformBridge';
+} from './services/networkUtils';
+import { PlatformBridge } from './services/platformBridge';
 import { getDeviceProfile } from './services/device';
 import { watchNetwork } from './services/network';
+import { clearHistory } from './services/storage';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { DeviceExplorer } from './components/DeviceExplorer';
@@ -69,8 +68,21 @@ export default function App() {
   const [isHotspotPromptOpen, setIsHotspotPromptOpen] = useState(false);
   const [incomingRequest, setIncomingRequest] = useState<IncomingRequestData | null>(null);
 
-  // Load real device info on launch
+  // Load real device info on launch & purge any stale mock seeds
   useEffect(() => {
+    try {
+      const rawTransfers = localStorage.getItem('zapdrop_transfers');
+      if (rawTransfers && (rawTransfers.includes('tr-1') || rawTransfers.includes('Sunset') || rawTransfers.includes('Drone_Footage') || rawTransfers.includes('Project_Design'))) {
+        localStorage.removeItem('zapdrop_transfers');
+        setTransfers([]);
+      }
+      const rawFiles = localStorage.getItem('zapdrop_files');
+      if (rawFiles && (rawFiles.includes('4K_Sunset') || rawFiles.includes('f1') || rawFiles.includes('Synthwave') || rawFiles.includes('Project_Architecture'))) {
+        localStorage.removeItem('zapdrop_files');
+        setFiles([]);
+      }
+    } catch {}
+
     getDeviceProfile().then((p) => {
       if (p) {
         setMyProfile((prev) => ({
@@ -179,18 +191,23 @@ export default function App() {
     password: 'zap-speed-889',
   }));
 
-  // Discovered peers
-  const [peers, setPeers] = useState<DeviceProfile[]>(DEFAULT_SAMPLE_PEERS);
+  // Discovered peers - only real peers found via radar
+  const [peers, setPeers] = useState<DeviceProfile[]>([]);
 
-  // Files in device storage
+  // Files in device storage (user added real files)
   const [files, setFiles] = useState<DeviceFile[]>(() => {
     const saved = localStorage.getItem('zapdrop_files');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (f) => !f.id?.startsWith('f') && !f.name?.includes('4K_Sunset') && !f.name?.includes('Synthwave')
+          );
+        }
       } catch {}
     }
-    return INITIAL_FILES;
+    return [];
   });
 
   // Selection & Transfers
@@ -199,10 +216,21 @@ export default function App() {
     const saved = localStorage.getItem('zapdrop_transfers');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (t) =>
+              t.id !== 'tr-1' &&
+              t.id !== 'tr-2' &&
+              t.id !== 'tr-3' &&
+              !t.fileName?.includes('Sunset') &&
+              !t.fileName?.includes('Drone_Footage') &&
+              !t.fileName?.includes('Project_Design')
+          );
+        }
       } catch {}
     }
-    return INITIAL_TRANSFERS;
+    return [];
   });
 
   // Active tab (Default: files / home folder screen above navigation)
@@ -363,6 +391,8 @@ export default function App() {
 
   const handleClearHistory = () => {
     setTransfers([]);
+    localStorage.removeItem('zapdrop_transfers');
+    clearHistory().catch(() => {});
   };
 
   const handleDeleteTransfer = (id: string) => {

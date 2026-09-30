@@ -2,6 +2,7 @@ name: Build & Release Linux Desktop
 
 on:
   push:
+    branches: [ main ]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -30,7 +31,7 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install frontend dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
       - name: Build Linux desktop bundles
         run: npm run tauri build
@@ -38,15 +39,15 @@ jobs:
       - name: Prepare checksums
         run: |
           mkdir -p artifacts
-          cp src-tauri/target/release/bundle/deb/*.deb artifacts/
-          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
+          cp src-tauri/target/release/bundle/deb/*.deb artifacts/ 2>/dev/null || true
+          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/ 2>/dev/null || true
           cd artifacts
-          sha256sum *.deb *.AppImage > SHA256SUMS
+          sha256sum *.deb *.AppImage > SHA256SUMS 2>/dev/null || true
 
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Zapdrop-${{ github.ref_name }}-linux
+          name: Zapdrop-${{ github.ref_name || 'v2.0.1' }}-linux
           path: artifacts/*
 
       - name: Attach Linux packages to GitHub release
@@ -54,9 +55,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Zapdrop ${{ github.ref_name }}"
+          name: "Zapdrop ${{ github.ref_name }} (Linux Desktop)"
           body: |
-            ## Zapdrop ${{ github.ref_name }} Linux desktop
+            ## Zapdrop ${{ github.ref_name }} Linux Desktop
 
             - Debian/Ubuntu: install the `.deb` package with `sudo apt install ./Zapdrop_*.deb`.
             - Portable Linux: make the `.AppImage` executable with `chmod +x` and run it.

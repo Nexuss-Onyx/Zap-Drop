@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { CheckCircle2, X, Download } from 'lucide-react';
 import { TransferRecord } from '../types';
-import { formatFileSize } from '../services/mockNetwork';
+import { formatFileSize } from '../services/networkUtils';
 
 interface TransferProgressModalProps {
   currentTransfer: TransferRecord | null;

@@ -1,9 +1,63 @@
 import { Capacitor } from '@capacitor/core';
 import { ZapdropNative, NativeMediaType } from '../native/zapdrop-native';
 import { DeviceFile, FileCategory, FolderNode } from '../types';
-import { MOCK_FILES, MOCK_FOLDERS, USE_MOCK } from './mock';
 import { backend, isTauri } from '../backend';
-import { formatFileSize } from './mockNetwork';
+import { formatFileSize } from './networkUtils';
+
+function getFolderIcon(name: string): FolderNode['icon'] {
+  const n = name.toLowerCase();
+  if (n.includes('camera')) return 'camera';
+  if (n.includes('download')) return 'download';
+  if (n.includes('video') || n.includes('movie')) return 'video';
+  if (n.includes('music') || n.includes('audio')) return 'music';
+  if (n.includes('screenshot') || n.includes('picture') || n.includes('photo')) return 'image';
+  if (n.includes('document') || n.includes('doc')) return 'file-text';
+  return 'folder';
+}
+
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size: number;
+  modified: number;
+  itemCount?: number;
+  extension?: string;
+}
+
+export async function listDeviceDirectory(path?: string): Promise<{ path: string; items: DirectoryEntry[] }> {
+  if (isTauri) {
+    try {
+      const b = await backend();
+      if (b.listDirectory) {
+        const res = await b.listDirectory(path);
+        return {
+          path: res.path,
+          items: res.items || [],
+        };
+      }
+    } catch (e) {
+      console.warn('Tauri list_directory error:', e);
+      return { path: path || '', items: [] };
+    }
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const res = await ZapdropNative.listDirectory({ path });
+      return {
+        path: res.path,
+        items: res.items || [],
+      };
+    } catch (e) {
+      console.warn('Failed to list directory', e);
+      return { path: path || '', items: [] };
+    }
+  }
+
+  // Web desktop fallback with zero mock data
+  return { path: path || '', items: [] };
+}
 
 export async function loadFolders(): Promise<FolderNode[]> {
   if (isTauri) {
@@ -14,53 +68,38 @@ export async function loadFolders(): Promise<FolderNode[]> {
         return folders.map((f) => ({
           name: f.name,
           path: f.name,
-          icon: f.name.toLowerCase().includes('picture') || f.name.toLowerCase().includes('photo')
-            ? 'image'
-            : f.name.toLowerCase().includes('download')
-            ? 'download'
-            : f.name.toLowerCase().includes('video') || f.name.toLowerCase().includes('movie')
-            ? 'video'
-            : f.name.toLowerCase().includes('music') || f.name.toLowerCase().includes('audio')
-            ? 'music'
-            : f.name.toLowerCase().includes('screenshot')
-            ? 'image'
-            : f.name.toLowerCase().includes('document')
-            ? 'file-text'
-            : 'folder',
+          icon: getFolderIcon(f.name),
           itemsCount: f.count,
           totalSize: f.size > 0 ? formatFileSize(f.size) : `${f.count} files`,
         }));
       }
+      return [];
     } catch (e) {
       console.warn('Tauri loadFolders error:', e);
+      return [];
     }
   }
 
-  if (USE_MOCK) {
-    return MOCK_FOLDERS;
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { buckets } = await ZapdropNative.listBuckets();
+      if (buckets && buckets.length > 0) {
+        return buckets.map((b) => ({
+          name: b.name,
+          path: b.path || b.name,
+          icon: getFolderIcon(b.name),
+          itemsCount: b.count,
+          totalSize: `${b.count} files`,
+        }));
+      }
+      return [];
+    } catch (e) {
+      console.warn('Failed to list native buckets', e);
+      return [];
+    }
   }
 
-  try {
-    const { buckets } = await ZapdropNative.listBuckets();
-    return buckets.map((b) => ({
-      name: b.name,
-      path: b.path,
-      icon: b.name.toLowerCase().includes('camera')
-        ? 'camera'
-        : b.name.toLowerCase().includes('download')
-        ? 'download'
-        : b.name.toLowerCase().includes('video') || b.name.toLowerCase().includes('movie')
-        ? 'video'
-        : b.name.toLowerCase().includes('music') || b.name.toLowerCase().includes('audio')
-        ? 'music'
-        : 'folder',
-      itemsCount: b.count,
-      totalSize: `${b.count} files`,
-    }));
-  } catch (e) {
-    console.warn('Failed to list native buckets, using fallback', e);
-    return MOCK_FOLDERS;
-  }
+  return [];
 }
 
 export async function loadFiles(
@@ -121,18 +160,12 @@ export async function loadFiles(
       );
     } catch (e) {
       console.warn('Tauri loadFiles error:', e);
+      return [];
     }
   }
 
-  if (USE_MOCK) {
-    let filtered = [...MOCK_FILES];
-    if (category !== 'all') {
-      filtered = filtered.filter((f) => f.category === category);
-    }
-    if (query) {
-      filtered = filtered.filter((f) => f.name.toLowerCase().includes(query.toLowerCase()));
-    }
-    return filtered;
+  if (!Capacitor.isNativePlatform()) {
+    return [];
   }
 
   let nativeType: NativeMediaType = 'all';
@@ -150,6 +183,10 @@ export async function loadFiles(
       limit: 60,
       offset: page * 60,
     });
+
+    if (!items || items.length === 0) {
+      return [];
+    }
 
     return items.map((i) => {
       let mappedCategory: FileCategory = 'documents';
@@ -169,12 +206,15 @@ export async function loadFiles(
         category: mappedCategory,
         mimeType: i.mime,
         isDirectory: false,
-        previewUrl: i.type === 'image' || i.type === 'video' ? Capacitor.convertFileSrc(i.webPath) : undefined,
+        previewUrl: i.type === 'image' || i.type === 'video'
+          ? (i.webPath ? Capacitor.convertFileSrc(i.webPath) : i.uri)
+          : undefined,
         extension: ext,
       };
     });
   } catch (e) {
-    console.warn('Failed to list native media, falling back', e);
-    return MOCK_FILES;
+    console.warn('Failed to list native media', e);
+    return [];
   }
 }
+

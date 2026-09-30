@@ -84,6 +84,7 @@ export interface ZapdropBackend {
   scanLibrary(): Promise<number>;
   loadFolders(): Promise<Folder[]>;
   loadFiles(q: { kind?: Kind; folder?: string; query?: string; page?: number }): Promise<{ items: FileItem[]; total: number }>;
+  listDirectory?(path?: string): Promise<{ path: string; items: any[] }>;
   addFiles(): Promise<FileItem[]>;                       // native picker
   addDroppedPaths(paths: string[]): Promise<FileItem[]>; // desktop drag & drop
   getThumbnail(item: FileItem): Promise<string | null>;
@@ -133,8 +134,8 @@ export async function backend(): Promise<ZapdropBackend> {
     const mod = await import('./capacitor');
     cached = mod.capacitorBackend;
   } else {
-    const mod = await import('./mock');
-    cached = mod.mockBackend;
+    const mod = await import('./web');
+    cached = mod.webBackend;
   }
   return cached;
 }

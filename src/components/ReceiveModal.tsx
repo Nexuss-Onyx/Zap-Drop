@@ -366,7 +366,9 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               </div>
 
               <span className="text-[10px] text-slate-400">
-                Tap a peer in radar to download files
+                {radarDevices.length > 0
+                  ? 'Tap a peer in radar to download files'
+                  : 'Scanning nearby network for real sender devices...'}
               </span>
 
               {/* Direct Code Entry (Ideal for desktops without camera) */}

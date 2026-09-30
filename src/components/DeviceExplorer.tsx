@@ -15,13 +15,12 @@ import {
   CheckCircle2,
   Send,
   ChevronRight,
-  Eye,
-  Trash2,
+  CornerLeftUp,
 } from 'lucide-react';
-import { DeviceFile, FileCategory, FolderNode } from '../types';
-import { loadFiles, loadFolders } from '../services/library';
+import { DeviceFile, FileCategory } from '../types';
+import { listDeviceDirectory, DirectoryEntry } from '../services/library';
 import { pickAnyFiles } from '../services/picker';
-import { formatFileSize } from '../services/mockNetwork';
+import { formatFileSize } from '../services/networkUtils';
 
 interface DeviceExplorerProps {
   files: DeviceFile[];
@@ -42,69 +41,59 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
   onClearSelection,
   onOpenSendWithFiles,
   onAddNewFiles,
-  onDeleteFile,
 }) => {
-  const [folders, setFolders] = useState<FolderNode[]>([]);
-  const [deviceFiles, setDeviceFiles] = useState<DeviceFile[]>(initialFiles);
-  const [currentFolder, setCurrentFolder] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<FileCategory>('all');
+  const [currentPath, setCurrentPath] = useState<string>('root');
+  const [pathHistory, setPathHistory] = useState<string[]>([]);
+  const [entries, setEntries] = useState<DirectoryEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [previewFile, setPreviewFile] = useState<DeviceFile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load real folders on mount
-  useEffect(() => {
-    loadFolders().then((f) => {
-      if (f && f.length > 0) setFolders(f);
-    });
-  }, []);
-
-  // Load real files when category or folder changes
+  // Load directory entries whenever currentPath changes
   useEffect(() => {
     setIsLoading(true);
-    loadFiles(selectedCategory, currentFolder || undefined, searchQuery || undefined)
-      .then((loaded) => {
-        if (loaded && loaded.length > 0) {
-          setDeviceFiles(loaded);
-        } else if (initialFiles.length > 0) {
-          setDeviceFiles(initialFiles);
-        }
+    listDeviceDirectory(currentPath === 'root' ? undefined : currentPath)
+      .then((res) => {
+        setEntries(res.items || []);
+      })
+      .catch(() => {
+        setEntries([]);
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, [selectedCategory, currentFolder, searchQuery, initialFiles]);
-
-  const filteredFiles = deviceFiles.filter((file) => {
-    if (selectedCategory !== 'all' && file.category !== selectedCategory) return false;
-    if (currentFolder && !file.path.toLowerCase().includes(currentFolder.toLowerCase())) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return file.name.toLowerCase().includes(q) || file.extension.toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  const categories: { id: FileCategory; label: string; icon: React.ElementType }[] = [
-    { id: 'all', label: 'All', icon: Folder },
-    { id: 'images', label: 'Photos', icon: ImageIcon },
-    { id: 'videos', label: 'Videos', icon: Film },
-    { id: 'documents', label: 'Docs', icon: FileText },
-    { id: 'audio', label: 'Audio', icon: Music },
-    { id: 'apps', label: 'Apps', icon: Package },
-    { id: 'archives', label: 'Zip', icon: Archive },
-  ];
+  }, [currentPath]);
 
   const handlePickSystemFiles = async () => {
     const pickedFiles = await pickAnyFiles();
     if (pickedFiles.length > 0) {
       onAddNewFiles(pickedFiles);
-      setDeviceFiles((prev) => [...pickedFiles, ...prev]);
+      // Prepend to current directory view as entries
+      const newEntries: DirectoryEntry[] = pickedFiles.map((p) => ({
+        name: p.name,
+        path: p.path || p.id,
+        isDirectory: false,
+        size: p.size,
+        modified: Date.now(),
+        extension: p.name.includes('.') ? p.name.split('.').pop() || '' : '',
+      }));
+      setEntries((prev) => [...newEntries, ...prev]);
     }
   };
 
-  const getFileCategoryIcon = (category: FileCategory) => {
+  const getCategoryFromExt = (ext: string = ''): FileCategory => {
+    const e = ext.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg', 'bmp'].includes(e)) return 'images';
+    if (['mp4', 'mkv', 'mov', 'avi', 'webm', '3gp'].includes(e)) return 'videos';
+    if (['mp3', 'wav', 'flac', 'm4a', 'aac', 'ogg'].includes(e)) return 'audio';
+    if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(e)) return 'documents';
+    if (['apk'].includes(e)) return 'apps';
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return 'archives';
+    return 'documents';
+  };
+
+  const getFileCategoryIcon = (ext: string = '') => {
+    const category = getCategoryFromExt(ext);
     switch (category) {
       case 'images':
         return <ImageIcon size={20} className="text-emerald-400" />;
@@ -121,13 +110,59 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
     }
   };
 
+  const handleEntryClick = (entry: DirectoryEntry) => {
+    if (entry.isDirectory) {
+      setPathHistory((prev) => [...prev, currentPath]);
+      setCurrentPath(entry.path);
+      setSearchQuery('');
+    } else {
+      const converted: DeviceFile = {
+        id: entry.path,
+        name: entry.name,
+        path: entry.path,
+        size: entry.size,
+        modifiedDate: new Date(entry.modified).toLocaleDateString(),
+        category: getCategoryFromExt(entry.extension),
+        mimeType: 'application/octet-stream',
+        isDirectory: false,
+        extension: entry.extension || '',
+      };
+      onToggleSelectFile(converted);
+    }
+  };
+
+  const handleNavigateUp = () => {
+    if (pathHistory.length > 0) {
+      const prev = pathHistory[pathHistory.length - 1];
+      setPathHistory((h) => h.slice(0, -1));
+      setCurrentPath(prev);
+    } else {
+      setCurrentPath('root');
+    }
+    setSearchQuery('');
+  };
+
+  const filteredEntries = entries.filter((e) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return e.name.toLowerCase().includes(q) || (e.extension && e.extension.toLowerCase().includes(q));
+  });
+
+  const folderCount = filteredEntries.filter((e) => e.isDirectory).length;
+  const fileCount = filteredEntries.filter((e) => !e.isDirectory).length;
   const totalSelectedSize = selectedFiles.reduce((sum, f) => sum + f.size, 0);
 
+  // Path label formatting
+  const displayFolderName =
+    currentPath === 'root'
+      ? 'Storage'
+      : currentPath.split('/').filter(Boolean).pop() || currentPath;
+
   return (
-    <div className="relative min-h-[calc(100vh-140px)] pb-28 pt-2 px-3 sm:px-6 max-w-5xl mx-auto">
+    <div className="relative min-h-[calc(100vh-140px)] pb-28 pt-2 px-3 sm:px-6 max-w-5xl mx-auto space-y-3">
       
       {/* Top Search & Actions */}
-      <div className="flex items-center justify-between gap-2.5 mb-4">
+      <div className="flex items-center justify-between gap-2.5">
         <div className="relative flex-1">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -167,138 +202,142 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
         </div>
       </div>
 
-      {/* Device Storage Folders */}
-      {!currentFolder && folders.length > 0 && (
-        <div className="mb-5">
-          <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 px-1">
-            Folders
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {folders.slice(0, 4).map((folder) => (
-              <div
-                key={folder.name}
-                onClick={() => setCurrentFolder(folder.name)}
-                className="p-3 rounded-2xl neu-raised border border-white/5 hover:border-[#22c55e]/40 cursor-pointer group transition-all"
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="w-8 h-8 rounded-xl neu-pressed flex items-center justify-center text-[#22c55e]">
-                    <Folder size={16} className="fill-[#22c55e]/20" />
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-medium">{folder.itemsCount}</span>
-                </div>
-                <div className="text-xs font-bold text-slate-200 group-hover:text-white truncate">
-                  {folder.name}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Breadcrumb if folder selected */}
-      {currentFolder && (
-        <div className="flex items-center justify-between gap-2 mb-4 p-2.5 rounded-2xl neu-pressed text-xs">
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-400 cursor-pointer hover:text-white" onClick={() => setCurrentFolder(null)}>
-              Storage
-            </span>
-            <ChevronRight size={12} className="text-slate-600" />
-            <span className="text-[#22c55e] font-bold">{currentFolder}</span>
-          </div>
-          <button
-            onClick={() => setCurrentFolder(null)}
-            className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+      {/* Breadcrumb Navigation & Counts */}
+      <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl neu-pressed text-xs">
+        <div className="flex items-center gap-1.5 min-w-0 truncate">
+          <span
+            onClick={() => {
+              setCurrentPath('root');
+              setPathHistory([]);
+              setSearchQuery('');
+            }}
+            className="text-slate-400 hover:text-white cursor-pointer font-medium"
           >
-            All Folders
-          </button>
+            Storage
+          </span>
+          {currentPath !== 'root' && (
+            <>
+              <ChevronRight size={12} className="text-slate-600 shrink-0" />
+              <span className="text-[#22c55e] font-bold truncate">
+                {displayFolderName}
+              </span>
+            </>
+          )}
         </div>
-      )}
 
-      {/* Categories */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-2.5 mb-3 scrollbar-none">
-        {categories.map((cat) => {
-          const isSelected = selectedCategory === cat.id;
-          return (
+        <div className="flex items-center gap-2 shrink-0">
+          {currentPath !== 'root' && (
             <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                isSelected
-                  ? 'bg-[#22c55e] text-black shadow-[0_0_12px_rgba(34,197,94,0.35)]'
-                  : 'neu-raised text-slate-400 hover:text-white border border-white/5'
-              }`}
+              onClick={handleNavigateUp}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-[11px] text-slate-300 transition-all cursor-pointer"
             >
-              {cat.label}
+              <CornerLeftUp size={12} />
+              <span>Back</span>
             </button>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Files Header / Selection Counter */}
-      <div className="flex items-center justify-between mb-3 px-1">
-        <span className="text-xs text-slate-400">
-          {filteredFiles.length} item{filteredFiles.length !== 1 ? 's' : ''}
-        </span>
-        {selectedFiles.length > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onSelectAll}
-              className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
-            >
-              Select All
-            </button>
+          {selectedFiles.length > 0 && (
             <button
               onClick={onClearSelection}
               className="text-[11px] text-emerald-400 font-semibold cursor-pointer"
             >
               Clear ({selectedFiles.length})
             </button>
-          </div>
+          )}
+        </div>
+      </div>
+
+      {/* Item Counter */}
+      <div className="flex items-center justify-between px-1 text-[11px] text-slate-400">
+        <span>
+          {folderCount} folder{folderCount !== 1 ? 's' : ''}, {fileCount} file{fileCount !== 1 ? 's' : ''}
+        </span>
+        {fileCount > 0 && selectedFiles.length < fileCount && (
+          <button
+            onClick={() => {
+              const allFiles: DeviceFile[] = filteredEntries
+                .filter((e) => !e.isDirectory)
+                .map((entry) => ({
+                  id: entry.path,
+                  name: entry.name,
+                  path: entry.path,
+                  size: entry.size,
+                  modifiedDate: new Date(entry.modified).toLocaleDateString(),
+                  category: getCategoryFromExt(entry.extension),
+                  mimeType: 'application/octet-stream',
+                  isDirectory: false,
+                  extension: entry.extension || '',
+                }));
+              onAddNewFiles(allFiles);
+              allFiles.forEach((f) => onToggleSelectFile(f));
+            }}
+            className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
+          >
+            Select All
+          </button>
         )}
       </div>
 
-      {/* Grid or List View */}
-      {viewMode === 'grid' ? (
+      {/* Directory Contents - Grid or List */}
+      {isLoading ? (
+        <div className="p-12 text-center text-xs text-slate-400">Loading directory...</div>
+      ) : filteredEntries.length === 0 ? (
+        <div className="p-12 rounded-3xl neu-pressed text-center text-slate-400 space-y-2">
+          <Folder size={32} className="mx-auto text-slate-600 mb-1" />
+          <p className="text-xs font-semibold text-slate-300">This folder is empty</p>
+          <p className="text-[11px] text-slate-500">
+            {currentPath !== 'root'
+              ? 'Tap "Back" to navigate to parent folders.'
+              : 'Add files using the button above or browse storage.'}
+          </p>
+        </div>
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-          {filteredFiles.map((file) => {
-            const isSelected = selectedFiles.some((f) => f.id === file.id);
+          {filteredEntries.map((entry) => {
+            const isSelected = !entry.isDirectory && selectedFiles.some((f) => f.path === entry.path || f.id === entry.path);
             return (
               <motion.div
-                key={file.id}
+                key={entry.path}
                 whileTap={{ scale: 0.96 }}
-                onClick={() => onToggleSelectFile(file)}
+                onClick={() => handleEntryClick(entry)}
                 className={`relative p-2.5 rounded-2xl neu-raised border transition-all cursor-pointer group flex flex-col items-center text-center ${
                   isSelected
                     ? 'border-[#22c55e] shadow-[0_0_15px_rgba(34,197,94,0.25)] bg-[#171922]'
                     : 'border-white/5 hover:border-white/20'
                 }`}
               >
-                {/* Selection indicator */}
-                <div
-                  className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-all z-10 ${
-                    isSelected
-                      ? 'bg-[#22c55e] text-black shadow-md'
-                      : 'border border-white/30 group-hover:border-white/60'
-                  }`}
-                >
-                  {isSelected && <CheckCircle2 size={13} className="stroke-[3]" />}
-                </div>
+                {/* Selection indicator for files */}
+                {!entry.isDirectory && (
+                  <div
+                    className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-all z-10 ${
+                      isSelected
+                        ? 'bg-[#22c55e] text-black shadow-md'
+                        : 'border border-white/30 group-hover:border-white/60'
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 size={13} className="stroke-[3]" />}
+                  </div>
+                )}
 
-                {/* Thumbnail / Icon */}
-                <div className="w-14 h-14 rounded-xl neu-pressed flex items-center justify-center overflow-hidden mb-2 relative">
-                  {file.previewUrl ? (
-                    <img src={file.previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                {/* Icon */}
+                <div className="w-14 h-14 rounded-xl neu-pressed flex items-center justify-center mb-2 relative">
+                  {entry.isDirectory ? (
+                    <Folder size={26} className="text-[#22c55e] fill-[#22c55e]/20" />
                   ) : (
-                    getFileCategoryIcon(file.category)
+                    getFileCategoryIcon(entry.extension)
                   )}
                 </div>
 
                 <div className="w-full">
                   <div className="text-[11px] font-bold text-slate-200 group-hover:text-white truncate">
-                    {file.name}
+                    {entry.name}
                   </div>
                   <div className="text-[9px] text-slate-500 mt-0.5">
-                    {formatFileSize(file.size)}
+                    {entry.isDirectory ? (
+                      `${entry.itemCount ?? 0} item${(entry.itemCount ?? 0) !== 1 ? 's' : ''}`
+                    ) : (
+                      formatFileSize(entry.size)
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -307,12 +346,12 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredFiles.map((file) => {
-            const isSelected = selectedFiles.some((f) => f.id === file.id);
+          {filteredEntries.map((entry) => {
+            const isSelected = !entry.isDirectory && selectedFiles.some((f) => f.path === entry.path || f.id === entry.path);
             return (
               <div
-                key={file.id}
-                onClick={() => onToggleSelectFile(file)}
+                key={entry.path}
+                onClick={() => handleEntryClick(entry)}
                 className={`p-3 rounded-2xl neu-raised border flex items-center justify-between gap-3 transition-all cursor-pointer ${
                   isSelected
                     ? 'border-[#22c55e] bg-[#171922]'
@@ -320,34 +359,44 @@ export const DeviceExplorer: React.FC<DeviceExplorerProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl neu-pressed flex items-center justify-center shrink-0 overflow-hidden">
-                    {file.previewUrl ? (
-                      <img src={file.previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                  <div className="w-10 h-10 rounded-xl neu-pressed flex items-center justify-center shrink-0">
+                    {entry.isDirectory ? (
+                      <Folder size={20} className="text-[#22c55e] fill-[#22c55e]/20" />
                     ) : (
-                      getFileCategoryIcon(file.category)
+                      getFileCategoryIcon(entry.extension)
                     )}
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-slate-200 truncate">
-                      {file.name}
+                      {entry.name}
                     </div>
                     <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5">
-                      <span>{formatFileSize(file.size)}</span>
-                      <span>•</span>
-                      <span>{file.modifiedDate}</span>
+                      {entry.isDirectory ? (
+                        <span>{entry.itemCount ?? 0} item{(entry.itemCount ?? 0) !== 1 ? 's' : ''}</span>
+                      ) : (
+                        <>
+                          <span>{formatFileSize(entry.size)}</span>
+                          <span>•</span>
+                          <span>{new Date(entry.modified).toLocaleDateString()}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all ${
-                    isSelected
-                      ? 'bg-[#22c55e] text-black shadow-md'
-                      : 'border border-white/30'
-                  }`}
-                >
-                  {isSelected && <CheckCircle2 size={15} className="stroke-[3]" />}
-                </div>
+                {entry.isDirectory ? (
+                  <ChevronRight size={15} className="text-slate-500 shrink-0" />
+                ) : (
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                      isSelected
+                        ? 'bg-[#22c55e] text-black shadow-md'
+                        : 'border border-white/30'
+                    }`}
+                  >
+                    {isSelected && <CheckCircle2 size={15} className="stroke-[3]" />}
+                  </div>
+                )}
               </div>
             );
           })}

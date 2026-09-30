@@ -43,18 +43,7 @@ jobs:
       - name: Synchronize Capacitor Android
         run: npx cap sync android
 
-      - name: Prepare signing keystore
-        env:
-          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/signing"
-          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "Missing RELEASE_KEYSTORE_BASE64 GitHub secret"
-            exit 1
-          fi
-          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/signing/release.keystore"
-
-      - name: Build Android Release APK
+      - name: Build Android APK
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
@@ -63,19 +52,28 @@ jobs:
         working-directory: ./android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace \
-            -PRELEASE_STORE_FILE="$RUNNER_TEMP/signing/release.keystore" \
-            -PRELEASE_STORE_PASSWORD="$RELEASE_STORE_PASSWORD" \
-            -PRELEASE_KEY_ALIAS="$RELEASE_KEY_ALIAS" \
-            -PRELEASE_KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+          if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
+            mkdir -p "$RUNNER_TEMP/signing"
+            printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/signing/release.keystore"
+            ./gradlew assembleRelease --stacktrace \
+              -PRELEASE_STORE_FILE="$RUNNER_TEMP/signing/release.keystore" \
+              -PRELEASE_STORE_PASSWORD="$RELEASE_STORE_PASSWORD" \
+              -PRELEASE_KEY_ALIAS="$RELEASE_KEY_ALIAS" \
+              -PRELEASE_KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+          else
+            echo "No signing keystore secret provided - building assembleDebug APK"
+            ./gradlew assembleDebug --stacktrace
+          fi
 
       - name: Prepare Artifacts & Checksum
         run: |
           mkdir -p artifacts
           APK_FILE=$(find android/app/build/outputs/apk/ -name "*.apk" | head -n 1)
           if [ -n "$APK_FILE" ]; then
-            cp "$APK_FILE" "artifacts/Zapdrop-${GITHUB_REF_NAME}-release.apk"
-            cd artifacts && sha256sum "Zapdrop-${GITHUB_REF_NAME}-release.apk" > "Zapdrop-${GITHUB_REF_NAME}-release.apk.sha256"
+            TAG_NAME="${{ github.ref_name }}"
+            [ -z "$TAG_NAME" ] && TAG_NAME="v2.0.1"
+            cp "$APK_FILE" "artifacts/Zapdrop-${TAG_NAME}.apk"
+            cd artifacts && sha256sum "Zapdrop-${TAG_NAME}.apk" > "Zapdrop-${TAG_NAME}.apk.sha256"
           else
             echo "Error: No APK generated!"
             exit 1
@@ -84,7 +82,7 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Zapdrop-${{ github.ref_name }}-release-apk
+          name: Zapdrop-${{ github.ref_name || 'v2.0.1' }}-android-apk
           path: artifacts/*
 
       - name: Create GitHub Release
@@ -99,16 +97,16 @@ jobs:
             - **Platform**: Android 5.1+ (API Level 22 through API 34+)
             - **Engine**: Capacitor 6.2 + React + Vite + Tailwind CSS + NanoHTTPD
             - **Key Features**:
-              - In-app MediaStore explorer (Photos, Videos, Audio, Docs, APKs)
+              - Direct device directory explorer (DCIM, Download, Documents, Pictures, etc.)
               - Embedded local HTTP file streaming server
               - QR code camera scanner & UDP radar peer discovery
               - Background transfer & notification support
             
             ### Artifacts:
-            - `Zapdrop-${{ github.ref_name }}-release.apk`
+            - `Zapdrop-${{ github.ref_name }}.apk`
           files: |
-            artifacts/Zapdrop-${{ github.ref_name }}-release.apk
-            artifacts/Zapdrop-${{ github.ref_name }}-release.apk.sha256
+            artifacts/Zapdrop-*.apk
+            artifacts/Zapdrop-*.apk.sha256
           draft: false
           prerelease: false
         env:

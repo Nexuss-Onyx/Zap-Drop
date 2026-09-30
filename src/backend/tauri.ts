@@ -85,6 +85,10 @@ export const tauriBackend: ZapdropBackend = {
     return invoke<number>('scan_library', { extraRoots });
   },
   loadFolders: () => invoke('list_folders'),
+  listDirectory: (path?: string) =>
+    invoke<{ path: string; items: any[] }>('list_directory', {
+      path: path && path !== 'root' ? path : null,
+    }),
   async loadFiles({ kind = 'all', folder, query, page = 0 }) {
     const r = await invoke<{ items: any[]; total: number }>('list_files', {
       kind,
