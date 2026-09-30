@@ -163,7 +163,11 @@ export default function App() {
 
       return () => {
         backSub.then((s) => s.remove());
-        netSub.then((s) => s.remove());
+        if (netSub instanceof Promise) {
+          netSub.then((s) => s.remove());
+        } else {
+          netSub.remove();
+        }
       };
     }
   }, []);

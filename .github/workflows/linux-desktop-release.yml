@@ -1,0 +1,71 @@
+name: Build & Release Linux Desktop
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Build Linux desktop bundles
+        run: npm run tauri build
+
+      - name: Prepare checksums
+        run: |
+          mkdir -p artifacts
+          cp src-tauri/target/release/bundle/deb/*.deb artifacts/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
+          cd artifacts
+          sha256sum *.deb *.AppImage > SHA256SUMS
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Zapdrop-${{ github.ref_name }}-linux
+          path: artifacts/*
+
+      - name: Attach Linux packages to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Zapdrop ${{ github.ref_name }}"
+          body: |
+            ## Zapdrop ${{ github.ref_name }} Linux desktop
+
+            - Debian/Ubuntu: install the `.deb` package with `sudo apt install ./Zapdrop_*.deb`.
+            - Portable Linux: make the `.AppImage` executable with `chmod +x` and run it.
+            - Verify downloads with `SHA256SUMS`.
+          files: |
+            artifacts/*.deb
+            artifacts/*.AppImage
+            artifacts/SHA256SUMS
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

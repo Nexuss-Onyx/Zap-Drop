@@ -1,6 +1,6 @@
 [package]
 name = "zapdrop"
-version = "1.0.0"
+version = "1.0.5"
 description = "Zapdrop cross-platform desktop peer-to-peer file sharing"
 authors = ["Zapdrop Team"]
 edition = "2021"
