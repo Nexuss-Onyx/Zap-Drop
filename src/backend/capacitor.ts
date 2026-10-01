@@ -17,6 +17,9 @@ import { Preferences } from '@capacitor/preferences';
 import { Clipboard } from '@capacitor/clipboard';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { pickAnyFiles } from '../services/picker';
+import { downloadToDevice } from '../services/files';
+
+const receiveProgressListeners = new Set<(p: Progress) => void>();
 
 const toFileItem = (m: any): FileItem => ({
   id: m.id,
@@ -159,8 +162,13 @@ export const capacitorBackend: ZapdropBackend = {
       size: f.size,
       mime: f.mime,
     }));
-    const res = await ZapdropNative.startServer({ token, files: sendFiles });
     const profile = await this.getProfile();
+    const res = await ZapdropNative.startServer({
+      token,
+      deviceName: profile.name,
+      deviceId: profile.id,
+      files: sendFiles,
+    });
     const chosenIp = ip || res.ip;
     const code = `${chosenIp}:${res.port}:${token}`;
     const qrPayload = JSON.stringify({
@@ -264,14 +272,34 @@ export const capacitorBackend: ZapdropBackend = {
     return fallbackRes.json();
   },
 
-  async receive(_sessionId, _ip, _port, _token, _peerName, _files): Promise<string[]> {
-    return [];
+  async receive(_sessionId, ip, port, token, _peerName, files): Promise<string[]> {
+    const saved: string[] = [];
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      const url = `http://${ip}:${port}/file/${encodeURIComponent(file.id)}?t=${encodeURIComponent(token)}`;
+      const path = await downloadToDevice(url, file.name, (loaded, total) => {
+        const progress: Progress = {
+          fileId: file.id,
+          fileName: file.name,
+          loaded,
+          total: total || file.size,
+          fileIndex: index,
+          fileCount: files.length,
+          speedBps: 0,
+        };
+        receiveProgressListeners.forEach((listener) => listener(progress));
+      });
+      saved.push(path);
+    }
+    await fetch(`http://${ip}:${port}/done?t=${encodeURIComponent(token)}`).catch(() => {});
+    return saved;
   },
 
   async cancelReceive() {},
 
-  onReceiveProgress(_cb: (p: Progress) => void) {
-    return () => {};
+  onReceiveProgress(cb: (p: Progress) => void) {
+    receiveProgressListeners.add(cb);
+    return () => receiveProgressListeners.delete(cb);
   },
 
   async openFile() {},

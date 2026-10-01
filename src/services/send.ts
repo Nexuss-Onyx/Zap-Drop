@@ -113,8 +113,12 @@ export async function startSend(
     mime: f.mimeType || 'application/octet-stream',
   }));
 
+  // Native startServer is the single owner of the hotspot/server lifecycle. It waits
+  // for a usable interface instead of returning a fake gateway address.
   const { ip, port } = await ZapdropNative.startServer({
     token,
+    deviceName: profile.name,
+    deviceId: profile.id,
     files: nativeFiles,
   });
 
@@ -134,6 +138,8 @@ export async function startSend(
 
   const qrCodeUrl = await makeQrDataUrl(payload);
   await holdScreen();
+  // Advertise only after the HTTP server is reachable; receivers filter out Connect-only devices.
+  await ZapdropNative.startDiscovery({ deviceId: profile.id, name: profile.name });
 
   const progressSub = await ZapdropNative.addListener('fileServed', (e) => {
     if (onProgress) onProgress(e.id, e.bytes, e.total);
@@ -158,6 +164,7 @@ export async function startSend(
     try {
       await progressSub.remove();
       await doneSub.remove();
+      await ZapdropNative.stopDiscovery().catch(() => {});
       await ZapdropNative.stopServer();
     } catch {}
     await releaseScreen();

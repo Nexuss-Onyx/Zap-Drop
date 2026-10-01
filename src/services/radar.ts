@@ -62,6 +62,8 @@ export async function startRadarDiscovery(
       os: 'android',
       signalStrength: 90,
       status: 'online',
+      ...(d.ip ? { ip: d.ip } : {}),
+      ...(d.port ? { port: d.port } : {}),
     });
   });
 

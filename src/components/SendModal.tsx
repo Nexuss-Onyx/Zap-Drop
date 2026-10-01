@@ -76,42 +76,17 @@ export const SendModal: React.FC<SendModalProps> = ({
       return;
     }
 
-    // Auto-enable hotspot if on native Android and hotspot is OFF
-    if (Capacitor.isNativePlatform() && !hotspotState.enabled) {
-      ZapdropNative.toggleHotspot({ enable: true }).catch(() => {});
-    }
-
+    // startServer owns the asynchronous hotspot -> interface -> server sequence.
+    // Do not race it with a second toggle request.
     initOrRefreshServer();
 
-    // Listen for Hotspot State changes to re-bind server with updated IP automatically
-    let sub: any = null;
-    if (Capacitor.isNativePlatform()) {
-      ZapdropNative.addListener('hotspotStateChange', (state) => {
-        if (state.enabled) {
-          initOrRefreshServer();
-        }
-      }).then((s) => {
-        sub = s;
-      });
-    }
-
     return () => {
-      if (sub) {
-        sub.remove();
-      }
       if (sessionRef.current) {
         sessionRef.current.stop().catch(() => {});
         sessionRef.current = null;
       }
     };
   }, [isOpen, selectedFiles]);
-
-  // Re-run server initialization if hotspot state becomes enabled
-  useEffect(() => {
-    if (isOpen && hotspotState.enabled && !qrCodeDataUrl) {
-      initOrRefreshServer();
-    }
-  }, [hotspotState.enabled, isOpen]);
 
   if (!isOpen) return null;
 

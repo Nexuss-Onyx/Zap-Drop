@@ -11,6 +11,8 @@ import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.Settings;
 
@@ -48,7 +50,11 @@ import java.util.concurrent.ConcurrentHashMap;
             "android.permission.READ_MEDIA_IMAGES",
             "android.permission.READ_MEDIA_VIDEO",
             "android.permission.READ_MEDIA_AUDIO"
-        }, alias = "media")
+        }, alias = "media"),
+        @Permission(strings = {
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.NEARBY_WIFI_DEVICES
+        }, alias = "wifi")
     }
 )
 public class ZapdropNativePlugin extends Plugin {
@@ -62,6 +68,7 @@ public class ZapdropNativePlugin extends Plugin {
     private final Map<String, Long> seenDevices = new ConcurrentHashMap<>();
     private WifiManager.LocalOnlyHotspotReservation hotspotReservation;
     private BroadcastReceiver hotspotReceiver;
+    private boolean hotspotStartInFlight = false;
 
     // Cache last server params so server auto-restarts/rebinds when Hotspot becomes ENABLED
     private String lastToken;
@@ -77,6 +84,21 @@ public class ZapdropNativePlugin extends Plugin {
 
     private String permAlias() {
         return Build.VERSION.SDK_INT >= 33 ? "media" : "storage";
+    }
+
+    private boolean hasWifiPermission() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        return getPermissionState("wifi") == PermissionState.GRANTED;
+    }
+
+    @PermissionCallback
+    private void wifiTogglePermCallback(PluginCall call) {
+        toggleHotspot(call);
+    }
+
+    @PermissionCallback
+    private void wifiServerPermCallback(PluginCall call) {
+        startServerWhenNetworkReady(call, 0);
     }
 
     private boolean hasStorageAccess() {
@@ -126,14 +148,14 @@ public class ZapdropNativePlugin extends Plugin {
                         JSObject o = new JSObject();
                         o.put("enabled", enabled);
                         String currentIp = findLocalIp();
-                        o.put("ip", currentIp != null ? currentIp : "192.168.43.1");
+                        o.put("ip", currentIp != null ? currentIp : "");
                         notifyListeners("hotspotStateChange", o);
 
                         if (state == 13) {
                             if (lastToken != null && server == null) {
                                 startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
                             }
-                        } else if (state == 11) {
+                        } else if (state == 11 && hotspotReservation != null) {
                             stopServerInternal();
                         }
                     }
@@ -157,22 +179,13 @@ public class ZapdropNativePlugin extends Plugin {
         return false;
     }
 
-    private void disableWifiIfEnabled() {
-        try {
-            WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            if (wifiManager != null && wifiManager.isWifiEnabled()) {
-                wifiManager.setWifiEnabled(false);
-            }
-        } catch (Exception ignored) {}
-    }
-
     @PluginMethod
     public void getHotspotStatus(PluginCall call) {
         boolean enabled = isHotspotEnabled() || hotspotReservation != null;
         String ip = findLocalIp();
         JSObject r = new JSObject();
         r.put("enabled", enabled);
-        r.put("ip", ip != null ? ip : "192.168.43.1");
+        r.put("ip", ip != null ? ip : "");
         r.put("ssid", "Zapdrop Mobile Hotspot");
         call.resolve(r);
     }
@@ -182,21 +195,33 @@ public class ZapdropNativePlugin extends Plugin {
         boolean enable = call.getBoolean("enable", true);
 
         if (enable) {
-            disableWifiIfEnabled();
+            if (hotspotReservation != null || isHotspotEnabled()) {
+                JSObject r = new JSObject();
+                r.put("enabled", true);
+                r.put("ip", findLocalIp() != null ? findLocalIp() : "");
+                call.resolve(r);
+                return;
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!hasWifiPermission()) {
+                    requestPermissionForAlias("wifi", call, "wifiTogglePermCallback");
+                    return;
+                }
                 try {
                     WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-                    if (wifiManager != null) {
+                    if (wifiManager != null && !hotspotStartInFlight) {
+                        hotspotStartInFlight = true;
                         wifiManager.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
                             @Override
                             public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
                                 super.onStarted(reservation);
                                 hotspotReservation = reservation;
+                                hotspotStartInFlight = false;
                                 String ip = findLocalIp();
                                 JSObject r = new JSObject();
                                 r.put("enabled", true);
-                                r.put("ip", ip != null ? ip : "192.168.43.1");
+                                r.put("ip", ip != null ? ip : "");
                                 notifyListeners("hotspotStateChange", r);
                                 call.resolve(r);
                             }
@@ -205,6 +230,7 @@ public class ZapdropNativePlugin extends Plugin {
                             public void onStopped() {
                                 super.onStopped();
                                 hotspotReservation = null;
+                                hotspotStartInFlight = false;
                                 JSObject r = new JSObject();
                                 r.put("enabled", false);
                                 notifyListeners("hotspotStateChange", r);
@@ -213,10 +239,11 @@ public class ZapdropNativePlugin extends Plugin {
                             @Override
                             public void onFailed(int reason) {
                                 super.onFailed(reason);
+                                hotspotStartInFlight = false;
                                 openHotspotSettings();
                                 JSObject r = new JSObject();
                                 r.put("enabled", isHotspotEnabled());
-                                call.resolve(r);
+                                call.reject("Android could not start the local hotspot (reason " + reason + "). Open Hotspot settings and try again.");
                             }
                         }, null);
                         return;
@@ -225,10 +252,12 @@ public class ZapdropNativePlugin extends Plugin {
                     openHotspotSettings();
                 }
             } else {
+                hotspotStartInFlight = false;
                 openHotspotSettings();
             }
             JSObject r = new JSObject();
             r.put("enabled", isHotspotEnabled());
+            r.put("ip", findLocalIp() != null ? findLocalIp() : "");
             call.resolve(r);
         } else {
             if (hotspotReservation != null) {
@@ -668,7 +697,7 @@ public class ZapdropNativePlugin extends Plugin {
         try {
             List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
             
-            // Priority 1: Hotspot / AP interfaces (ap0, swlan0, wlan1, etc.) or IPs in 192.168.43.x / 192.168.49.x
+            // Prefer hotspot/AP interfaces, but accept a normal Wi-Fi/LAN interface too.
             for (NetworkInterface ni : interfaces) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
                 String name = ni.getName().toLowerCase();
@@ -692,7 +721,67 @@ public class ZapdropNativePlugin extends Plugin {
                 }
             }
         } catch (Exception ignored) {}
-        return "192.168.43.1";
+        return null;
+    }
+
+    private void startServerWhenNetworkReady(final PluginCall call, final int attempt) {
+        String ip = findLocalIp();
+        if (ip != null && !ip.isEmpty()) {
+            try {
+                startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
+                if (server == null) {
+                    call.reject("Cannot start local server");
+                    return;
+                }
+                JSObject r = new JSObject();
+                r.put("ip", ip);
+                r.put("port", server.getListeningPort());
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Cannot start server: " + e.getMessage());
+            }
+            return;
+        }
+
+        if (attempt == 0 && hotspotReservation == null && !isHotspotEnabled()
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !hotspotStartInFlight) {
+            if (!hasWifiPermission()) {
+                requestPermissionForAlias("wifi", call, "wifiServerPermCallback");
+                return;
+            }
+            try {
+                WifiManager wifiManager = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                if (wifiManager != null) {
+                    hotspotStartInFlight = true;
+                    wifiManager.startLocalOnlyHotspot(new WifiManager.LocalOnlyHotspotCallback() {
+                        @Override public void onStarted(WifiManager.LocalOnlyHotspotReservation reservation) {
+                            hotspotReservation = reservation;
+                            hotspotStartInFlight = false;
+                            startServerWhenNetworkReady(call, 1);
+                        }
+                        @Override public void onStopped() {
+                            hotspotReservation = null;
+                            hotspotStartInFlight = false;
+                        }
+                        @Override public void onFailed(int reason) {
+                            hotspotStartInFlight = false;
+                            call.reject("Android could not start the local hotspot (reason " + reason + "). Open Hotspot settings and try again.");
+                        }
+                    }, null);
+                    return;
+                }
+            } catch (Exception e) {
+                hotspotStartInFlight = false;
+                call.reject("Cannot request local hotspot: " + e.getMessage());
+                return;
+            }
+        }
+
+        if (attempt < 50) {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> startServerWhenNetworkReady(call, attempt + 1), 200);
+        } else {
+            call.reject("No usable local Wi-Fi address. Connect both devices to the same Wi-Fi or enable Mobile Hotspot, then try Release again.");
+        }
     }
 
     // ---------- server ----------
@@ -704,17 +793,7 @@ public class ZapdropNativePlugin extends Plugin {
             lastDeviceId = call.getString("deviceId", "android-" + System.currentTimeMillis());
             lastFiles = call.getArray("files");
 
-            if (!isHotspotEnabled() && hotspotReservation == null) {
-                disableWifiIfEnabled();
-            }
-
-            startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
-
-            JSObject r = new JSObject();
-            String ip = findLocalIp();
-            r.put("ip", ip != null ? ip : "192.168.43.1");
-            r.put("port", server != null ? server.getListeningPort() : 48556);
-            call.resolve(r);
+            startServerWhenNetworkReady(call, 0);
         } catch (Exception e) {
             call.reject("Cannot start server: " + e.getMessage());
         }
@@ -784,7 +863,8 @@ public class ZapdropNativePlugin extends Plugin {
                 while (isDiscovering) {
                     try {
                         String localIp = findLocalIp();
-                        String msg = "ZAPDROP|" + deviceId + "|" + name + "|48555";
+                        String role = server != null ? "release" : "connect";
+                        String msg = "ZAPDROP|1|" + deviceId + "|" + name.replace("|", " ") + "|48555|" + role;
                         byte[] data = msg.getBytes();
 
                         try {
@@ -823,10 +903,10 @@ public class ZapdropNativePlugin extends Plugin {
                         String str = new String(p.getData(), 0, p.getLength());
                         if (str.startsWith("ZAPDROP|")) {
                             String[] parts = str.split("\\|");
-                            if (parts.length >= 4) {
-                                String senderId = parts[1];
-                                String senderName = parts[2];
-                                int port = Integer.parseInt(parts[3]);
+                            if (parts.length >= 6 && "release".equals(parts[5])) {
+                                String senderId = parts[2];
+                                String senderName = parts[3];
+                                int port = Integer.parseInt(parts[4]);
                                 String senderIp = p.getAddress().getHostAddress();
 
                                 if (!senderId.equals(deviceId)) {

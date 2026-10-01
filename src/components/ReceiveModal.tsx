@@ -83,7 +83,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
 
           if (res && res.ok && isMounted) {
             const data = await res.json().catch(() => null);
-            if (data && data.deviceId) {
+            if (data && data.deviceId && Number(data.fileCount || 0) > 0) {
               const dev: DeviceProfile = {
                 id: data.deviceId,
                 name: data.name || 'Mobile Hotspot Device',
@@ -162,7 +162,8 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
     } catch (err: any) {
       const msg = err?.message || err?.toString() || 'Transfer failed';
       setStatusMessage(msg.includes('DECLINED') ? 'Request declined by sender' : msg);
-      onConnectDevice(peer);
+      // Do not create a fake sent transfer on a failed receive attempt.
+      // The sender role is established by the real Release server only.
     } finally {
       setIsReceiving(false);
       setConnectingPeerId(null);
