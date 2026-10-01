@@ -239,7 +239,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 {isCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
               </button>
 
-              <span className="text-xs font-bold text-white">Receive Files</span>
+              <span className="text-xs font-bold text-white">Connect & Download</span>
               <span className="text-[10px] text-slate-400">
                 ({radarDevices.length} nearby)
               </span>

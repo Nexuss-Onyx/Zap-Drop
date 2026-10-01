@@ -152,7 +152,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             transition={{ type: 'spring', stiffness: 440, damping: 25 }}
             className="pointer-events-auto mb-3 flex items-center justify-center gap-6"
           >
-            {/* SEND / HOTSPOT CIRCLE BUTTON */}
+            {/* RELEASE / HOTSPOT CIRCLE BUTTON */}
             <div className="flex flex-col items-center gap-1">
               <motion.button
                 whileHover={{ scale: 1.1 }}
@@ -162,14 +162,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   onOpenSend();
                 }}
                 className="w-13 h-13 rounded-full bg-gradient-to-tr from-[#15803d] to-[#2ee86f] text-white flex items-center justify-center shadow-[0_0_25px_rgba(46,232,111,0.5)] border-2 border-white/20 transition-all cursor-pointer"
-                title="Send via Hotspot"
+                title="Release via Hotspot"
               >
                 <Radio size={20} className="stroke-[2.5]" />
               </motion.button>
-              <span className="text-[11px] font-bold text-white drop-shadow-md">Send</span>
+              <span className="text-[11px] font-bold text-white drop-shadow-md">Release</span>
             </div>
 
-            {/* RECEIVE / DOWNLOAD CIRCLE BUTTON */}
+            {/* CONNECT / DOWNLOAD CIRCLE BUTTON */}
             <div className="flex flex-col items-center gap-1">
               <motion.button
                 whileHover={{ scale: 1.1 }}
@@ -179,11 +179,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   onOpenReceive();
                 }}
                 className="w-13 h-13 rounded-full bg-[#171922] text-[#2ee86f] border-2 border-[#2ee86f]/70 flex items-center justify-center shadow-[0_0_20px_rgba(46,232,111,0.35)] transition-all cursor-pointer"
-                title="Receive Download"
+                title="Connect & Receive"
               >
                 <ArrowDownToLine size={20} className="stroke-[2.5]" />
               </motion.button>
-              <span className="text-[11px] font-bold text-white drop-shadow-md">Receive</span>
+              <span className="text-[11px] font-bold text-white drop-shadow-md">Connect</span>
             </div>
           </motion.div>
         )}

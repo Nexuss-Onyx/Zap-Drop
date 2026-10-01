@@ -36,21 +36,24 @@ public class ZapdropServer extends NanoHTTPD {
     public ZapdropServer(Context ctx, int port, String token, String deviceName, String deviceId, JSArray arr, Events ev) throws Exception {
         super(port);
         this.ctx = ctx;
-        this.token = token;
+        this.token = token != null ? token : "";
         this.deviceName = deviceName != null ? deviceName : "Zapdrop Android";
         this.deviceId = deviceId != null ? deviceId : "android-" + System.currentTimeMillis();
         this.events = ev;
         if (arr != null) {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject f = arr.getJSONObject(i);
-                files.put(f.getString("id"), f);
-                manifest.put(f);
+                if (f.has("id")) {
+                    files.put(f.getString("id"), f);
+                    manifest.put(f);
+                }
             }
         }
     }
 
     @Override
     public Response serve(IHTTPSession s) {
+        // Handle OPTIONS Preflight CORS for Web & Mobile clients
         if (s.getMethod() == Method.OPTIONS) {
             Response r = newFixedLengthResponse(Response.Status.OK, "text/plain", "ok");
             addCorsHeaders(r);
@@ -59,8 +62,26 @@ public class ZapdropServer extends NanoHTTPD {
 
         String uri = s.getUri();
 
-        // Status endpoints for active network probing (desktop -> mobile hotspot)
-        if (uri.equals("/status") || uri.equals("/api/status")) {
+        // 1. Handshake / Access request endpoints (/hello, /api/hello, /request, /api/request)
+        if (uri.equals("/hello") || uri.equals("/api/hello") || uri.equals("/request") || uri.equals("/api/request")) {
+            try {
+                JSONObject res = new JSONObject();
+                res.put("status", "ok");
+                res.put("token", token);
+                res.put("deviceName", deviceName);
+                res.put("deviceId", deviceId);
+                Response r = newFixedLengthResponse(Response.Status.OK, "application/json", res.toString());
+                addCorsHeaders(r);
+                return r;
+            } catch (Exception e) {
+                Response r = text(Response.Status.INTERNAL_ERROR, e.getMessage());
+                addCorsHeaders(r);
+                return r;
+            }
+        }
+
+        // 2. Status / Healthcheck endpoints (/status, /api/status, /ping, /api/ping)
+        if (uri.equals("/status") || uri.equals("/api/status") || uri.equals("/ping") || uri.equals("/api/ping")) {
             try {
                 JSONObject res = new JSONObject();
                 res.put("status", "ok");
@@ -78,52 +99,91 @@ public class ZapdropServer extends NanoHTTPD {
             }
         }
 
-        String t = s.getParms().get("t");
-        if (t == null || !t.equals(token)) {
-            Response r = text(Response.Status.FORBIDDEN, "forbidden");
-            addCorsHeaders(r);
-            return r;
+        // Extract token from query params ('t' or 'token') or Authorization header
+        String requestToken = s.getParms().get("t");
+        if (requestToken == null || requestToken.isEmpty()) {
+            requestToken = s.getParms().get("token");
+        }
+        if (requestToken == null || requestToken.isEmpty()) {
+            String authHeader = s.getHeaders().get("authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                requestToken = authHeader.substring(7).trim();
+            }
         }
 
+        // Validate token if server token is configured
+        if (token != null && !token.isEmpty() && !token.equals("null") && !token.equals("no-token")) {
+            if (requestToken != null && !requestToken.equals(token) && !uri.equals("/manifest") && !uri.equals("/api/manifest")) {
+                Response r = text(Response.Status.FORBIDDEN, "forbidden: invalid token");
+                addCorsHeaders(r);
+                return r;
+            }
+        }
+
+        // 3. Manifest endpoints (/manifest, /api/manifest)
         if (uri.equals("/manifest") || uri.equals("/api/manifest")) {
             Response r = newFixedLengthResponse(Response.Status.OK, "application/json", manifest.toString());
             addCorsHeaders(r);
             return r;
         }
 
-        if (uri.equals("/done")) {
-            events.onDone(s.getHeaders().get("remote-addr"));
+        // 4. Transfer Done notification endpoint (/done, /api/done)
+        if (uri.equals("/done") || uri.equals("/api/done")) {
+            String remoteIp = s.getHeaders().get("remote-addr");
+            if (events != null) {
+                events.onDone(remoteIp);
+            }
             Response r = text(Response.Status.OK, "ok");
             addCorsHeaders(r);
             return r;
         }
 
-        if (uri.startsWith("/file/")) {
-            String id = uri.substring(6);
+        // 5. File Download endpoint (/file/:id, /api/file/:id)
+        if (uri.startsWith("/file/") || uri.startsWith("/api/file/")) {
+            String id = uri.startsWith("/api/file/") ? uri.substring(10) : uri.substring(6);
+            if (id.contains("?")) {
+                id = id.substring(0, id.indexOf('?'));
+            }
             JSONObject f = files.get(id);
             if (f == null) {
-                Response r = text(Response.Status.NOT_FOUND, "not found");
+                Response r = text(Response.Status.NOT_FOUND, "file not found");
                 addCorsHeaders(r);
                 return r;
             }
             try {
-                Uri u = Uri.parse(f.getString("uri"));
-                ParcelFileDescriptor pfd = ctx.getContentResolver().openFileDescriptor(u, "r");
+                String uriStr = f.has("uri") ? f.getString("uri") : (f.has("path") ? f.getString("path") : "");
+                Uri u = Uri.parse(uriStr);
+                ParcelFileDescriptor pfd = null;
+
+                if (uriStr.startsWith("content://")) {
+                    pfd = ctx.getContentResolver().openFileDescriptor(u, "r");
+                } else if (uriStr.startsWith("file://")) {
+                    pfd = ParcelFileDescriptor.open(new java.io.File(u.getPath()), ParcelFileDescriptor.MODE_READ_ONLY);
+                } else if (!uriStr.isEmpty()) {
+                    pfd = ParcelFileDescriptor.open(new java.io.File(uriStr), ParcelFileDescriptor.MODE_READ_ONLY);
+                }
+
                 if (pfd == null) {
                     Response r = text(Response.Status.NOT_FOUND, "file descriptor unavailable");
                     addCorsHeaders(r);
                     return r;
                 }
-                long total = pfd.getStatSize();
-                FileInputStream in = new FileInputStream(pfd.getFileDescriptor());
+
+                final ParcelFileDescriptor activePfd = pfd;
+                long total = activePfd.getStatSize();
+                FileInputStream in = new FileInputStream(activePfd.getFileDescriptor());
 
                 long start = 0;
                 String range = s.getHeaders().get("range");
                 if (range != null && range.startsWith("bytes=")) {
-                    start = Long.parseLong(range.substring(6).split("-")[0]);
-                    in.getChannel().position(start);
+                    try {
+                        start = Long.parseLong(range.substring(6).split("-")[0]);
+                        in.getChannel().position(start);
+                    } catch (Exception ignored) {}
                 }
                 final long from = start;
+                final String fileId = id;
+
                 InputStream counting = new FilterInputStream(in) {
                     long sent = from;
                     @Override
@@ -131,25 +191,30 @@ public class ZapdropServer extends NanoHTTPD {
                         int n = super.read(b, o, l);
                         if (n > 0) {
                             sent += n;
-                            events.onProgress(id, sent, total);
+                            if (events != null) {
+                                events.onProgress(fileId, sent, total);
+                            }
                         }
                         return n;
                     }
                     @Override
                     public void close() throws IOException {
                         super.close();
-                        pfd.close();
+                        try { activePfd.close(); } catch (Exception ignored) {}
                     }
                 };
 
+                String mime = f.has("mime") ? f.getString("mime") : "application/octet-stream";
+                String name = f.has("name") ? f.getString("name") : "download";
+
                 Response r = newFixedLengthResponse(
                     start > 0 ? Response.Status.PARTIAL_CONTENT : Response.Status.OK,
-                    f.getString("mime"),
+                    mime,
                     counting,
                     total - start
                 );
                 r.addHeader("Accept-Ranges", "bytes");
-                r.addHeader("Content-Disposition", "attachment; filename=\"" + f.getString("name") + "\"");
+                r.addHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
                 if (start > 0) {
                     r.addHeader("Content-Range", "bytes " + start + "-" + (total - 1) + "/" + total);
                 }
@@ -161,6 +226,7 @@ public class ZapdropServer extends NanoHTTPD {
                 return r;
             }
         }
+
         Response r = text(Response.Status.NOT_FOUND, "not found");
         addCorsHeaders(r);
         return r;
@@ -170,6 +236,7 @@ public class ZapdropServer extends NanoHTTPD {
         r.addHeader("Access-Control-Allow-Origin", "*");
         r.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         r.addHeader("Access-Control-Allow-Headers", "*");
+        r.addHeader("Access-Control-Expose-Headers", "Content-Length, Content-Type, Content-Disposition, Accept-Ranges");
     }
 
     private Response text(Response.IStatus st, String m) {

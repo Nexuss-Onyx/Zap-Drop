@@ -209,7 +209,7 @@ export const SendModal: React.FC<SendModalProps> = ({
               </button>
 
               <span className="text-xs font-bold text-white">
-                {transferDone ? 'Transfer Complete' : `Sending ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`}
+                {transferDone ? 'Release Complete' : `Releasing ${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`}
               </span>
               <span className="text-[10px] text-slate-400">
                 ({formatFileSize(totalSize)})

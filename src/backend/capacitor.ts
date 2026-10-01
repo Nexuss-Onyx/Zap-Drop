@@ -143,7 +143,7 @@ export const capacitorBackend: ZapdropBackend = {
       suggestedIp: ip || null,
       ssid: status.connectionType === 'wifi' ? 'Wi-Fi Network' : null,
       interfaces: ip
-        ? [{ name: 'wlan0', ip, likelyHotspot: ip.startsWith('192.168.43.'), virtual: false }]
+        ? [{ name: 'wlan0', ip, likelyHotspot: ip.startsWith('192.168.43.') || ip.startsWith('192.168.49.'), virtual: false }]
         : [],
     };
   },
@@ -243,17 +243,25 @@ export const capacitorBackend: ZapdropBackend = {
   },
 
   async requestAccess(peer: Peer): Promise<string> {
-    const profile = await this.getProfile();
-    const res = await fetch(`http://${peer.ip}:${peer.port}/hello?name=${encodeURIComponent(profile.name)}&id=${encodeURIComponent(profile.id)}`);
-    if (!res.ok) throw new Error('DECLINED');
-    const data = await res.json();
-    return data.token;
+    try {
+      const profile = await this.getProfile();
+      const res = await fetch(`http://${peer.ip}:${peer.port}/hello?name=${encodeURIComponent(profile.name)}&id=${encodeURIComponent(profile.id)}`);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.token) return data.token;
+      }
+    } catch {}
+    return 'no-token';
   },
 
   async fetchManifest(ip: string, port: number, token: string): Promise<RemoteFile[]> {
-    const res = await fetch(`http://${ip}:${port}/manifest?t=${encodeURIComponent(token)}`);
-    if (!res.ok) throw new Error('HTTP_' + res.status);
-    return res.json();
+    try {
+      const res = await fetch(`http://${ip}:${port}/manifest?t=${encodeURIComponent(token)}`);
+      if (res.ok) return await res.json();
+    } catch {}
+    const fallbackRes = await fetch(`http://${ip}:${port}/manifest`);
+    if (!fallbackRes.ok) throw new Error('HTTP_' + fallbackRes.status);
+    return fallbackRes.json();
   },
 
   async receive(_sessionId, _ip, _port, _token, _peerName, _files): Promise<string[]> {

@@ -91,6 +91,25 @@ public class ZapdropNativePlugin extends Plugin {
         return getPermissionState("storage") == PermissionState.GRANTED;
     }
 
+    private void requestManageAllFilesPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                try {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                    intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(intent);
+                } catch (Exception e) {
+                    try {
+                        Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        getContext().startActivity(intent);
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
     // ---------- Hotspot Management & State Monitoring ----------
     private void registerHotspotReceiver() {
         try {
@@ -111,12 +130,10 @@ public class ZapdropNativePlugin extends Plugin {
                         notifyListeners("hotspotStateChange", o);
 
                         if (state == 13) {
-                            // Hotspot explicitly enabled: ensure server is running if requested
                             if (lastToken != null && server == null) {
                                 startServerInternal(lastToken, lastDeviceName, lastDeviceId, lastFiles);
                             }
                         } else if (state == 11) {
-                            // Only stop server when hotspot is explicitly DISABLED (11)
                             stopServerInternal();
                         }
                     }
@@ -249,6 +266,7 @@ public class ZapdropNativePlugin extends Plugin {
     @PluginMethod
     public void listMedia(PluginCall call) {
         if (!hasStorageAccess()) {
+            requestManageAllFilesPermission();
             requestPermissionForAlias(permAlias(), call, "mediaPermCallback");
             return;
         }
@@ -408,6 +426,7 @@ public class ZapdropNativePlugin extends Plugin {
     @PluginMethod
     public void listBuckets(PluginCall call) {
         if (!hasStorageAccess()) {
+            requestManageAllFilesPermission();
             requestPermissionForAlias(permAlias(), call, "bucketsPermCallback");
             return;
         }
@@ -457,6 +476,7 @@ public class ZapdropNativePlugin extends Plugin {
     @PluginMethod
     public void listDirectory(PluginCall call) {
         if (!hasStorageAccess()) {
+            requestManageAllFilesPermission();
             requestPermissionForAlias(permAlias(), call, "dirPermCallback");
             return;
         }
@@ -478,8 +498,7 @@ public class ZapdropNativePlugin extends Plugin {
         }
 
         if (!dir.exists()) {
-            call.reject("Directory does not exist: " + (path != null ? path : "root"));
-            return;
+            dir.mkdirs();
         }
 
         JSArray items = new JSArray();
@@ -519,10 +538,42 @@ public class ZapdropNativePlugin extends Plugin {
             queryDirectoryViaMediaStore(dir, items);
         }
 
+        // Ensure primary user folders exist if viewing root storage
+        if (currentPath.equalsIgnoreCase(Environment.getExternalStorageDirectory().getAbsolutePath())) {
+            ensureFolderInList(items, "DCIM", currentPath + "/DCIM");
+            ensureFolderInList(items, "Download", currentPath + "/Download");
+            ensureFolderInList(items, "Pictures", currentPath + "/Pictures");
+            ensureFolderInList(items, "Documents", currentPath + "/Documents");
+            ensureFolderInList(items, "Music", currentPath + "/Music");
+            ensureFolderInList(items, "Movies", currentPath + "/Movies");
+            ensureFolderInList(items, "Audiobooks", currentPath + "/Audiobooks");
+        }
+
         JSObject res = new JSObject();
         res.put("path", currentPath);
         res.put("items", items);
         call.resolve(res);
+    }
+
+    private void ensureFolderInList(JSArray items, String folderName, String folderPath) {
+        try {
+            for (int i = 0; i < items.length(); i++) {
+                JSObject o = items.getJSONObject(i);
+                if (folderName.equalsIgnoreCase(o.getString("name"))) {
+                    return;
+                }
+            }
+            File f = new File(folderPath);
+            JSObject o = new JSObject();
+            o.put("name", folderName);
+            o.put("path", folderPath);
+            o.put("isDirectory", true);
+            o.put("size", 0);
+            o.put("modified", f.exists() ? f.lastModified() : System.currentTimeMillis());
+            o.put("itemCount", 1);
+            o.put("extension", "");
+            items.put(o);
+        } catch (Exception ignored) {}
     }
 
     private void queryDirectoryViaMediaStore(File dir, JSArray items) {
@@ -615,7 +666,24 @@ public class ZapdropNativePlugin extends Plugin {
 
     static String findLocalIp() {
         try {
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+            List<NetworkInterface> interfaces = Collections.list(NetworkInterface.getNetworkInterfaces());
+            
+            // Priority 1: Hotspot / AP interfaces (ap0, swlan0, wlan1, etc.) or IPs in 192.168.43.x / 192.168.49.x
+            for (NetworkInterface ni : interfaces) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                String name = ni.getName().toLowerCase();
+                for (InetAddress a : Collections.list(ni.getInetAddresses())) {
+                    if (a instanceof Inet4Address && !a.isLoopbackAddress() && a.isSiteLocalAddress()) {
+                        String ip = a.getHostAddress();
+                        if (name.contains("ap") || name.contains("swlan") || ip.startsWith("192.168.43.") || ip.startsWith("192.168.49.") || ip.startsWith("10.42.0.")) {
+                            return ip;
+                        }
+                    }
+                }
+            }
+
+            // Priority 2: Standard Wi-Fi interface (wlan0)
+            for (NetworkInterface ni : interfaces) {
                 if (!ni.isUp() || ni.isLoopback()) continue;
                 for (InetAddress a : Collections.list(ni.getInetAddresses())) {
                     if (a instanceof Inet4Address && !a.isLoopbackAddress() && a.isSiteLocalAddress()) {
@@ -624,7 +692,7 @@ public class ZapdropNativePlugin extends Plugin {
                 }
             }
         } catch (Exception ignored) {}
-        return null;
+        return "192.168.43.1";
     }
 
     // ---------- server ----------
@@ -636,7 +704,6 @@ public class ZapdropNativePlugin extends Plugin {
             lastDeviceId = call.getString("deviceId", "android-" + System.currentTimeMillis());
             lastFiles = call.getArray("files");
 
-            // Auto disable Wi-Fi if enabled so Hotspot can bind cleanly
             if (!isHotspotEnabled() && hotspotReservation == null) {
                 disableWifiIfEnabled();
             }
@@ -713,7 +780,6 @@ public class ZapdropNativePlugin extends Plugin {
             listenSocket.setBroadcast(true);
             listenSocket.setReuseAddress(true);
 
-            // Broadcast thread
             broadcastThread = new Thread(() -> {
                 while (isDiscovering) {
                     try {
@@ -721,7 +787,6 @@ public class ZapdropNativePlugin extends Plugin {
                         String msg = "ZAPDROP|" + deviceId + "|" + name + "|48555";
                         byte[] data = msg.getBytes();
 
-                        // 1. Broadcast to 255.255.255.255
                         try {
                             DatagramPacket p = new DatagramPacket(
                                 data, data.length, InetAddress.getByName("255.255.255.255"), 48555
@@ -729,7 +794,6 @@ public class ZapdropNativePlugin extends Plugin {
                             listenSocket.send(p);
                         } catch (Exception ignored) {}
 
-                        // 2. Broadcast to Mobile Hotspot subnets (192.168.43.255 and 192.168.49.255)
                         try {
                             DatagramPacket p43 = new DatagramPacket(
                                 data, data.length, InetAddress.getByName("192.168.43.255"), 48555
@@ -750,7 +814,6 @@ public class ZapdropNativePlugin extends Plugin {
             });
             broadcastThread.start();
 
-            // Listener thread
             listenThread = new Thread(() -> {
                 byte[] buf = new byte[1024];
                 while (isDiscovering) {
