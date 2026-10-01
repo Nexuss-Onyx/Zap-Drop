@@ -558,8 +558,8 @@ public class ZapdropNativePlugin extends Plugin {
     private void ensureFolderInList(JSArray items, String folderName, String folderPath) {
         try {
             for (int i = 0; i < items.length(); i++) {
-                JSObject o = items.getJSONObject(i);
-                if (folderName.equalsIgnoreCase(o.getString("name"))) {
+                org.json.JSONObject o = items.getJSONObject(i);
+                if (folderName.equalsIgnoreCase(o.optString("name"))) {
                     return;
                 }
             }
